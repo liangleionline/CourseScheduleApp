@@ -26,58 +26,38 @@ public class TimetableEngine {
             result.addAll(monday);
             return result;
         }
-        // 其余天：非课程带来自周一模板（贯穿全周）+ 本天课程填入空闲时段
+        // 其余天：非课程带来自周一模板（贯穿全周）+ 本天课程顺序填入「非课程带之间的课程时段」
         List<RenderedCell> monday = layoutMonday(data);
-        int lastEnd = data.firstStartMin;
-        List<long[]> gaps = new ArrayList<>();
-        for (int i = 0; i <= monday.size(); i++) {
-            long gs, ge;
-            if (i == 0) { gs = data.firstStartMin; ge = monday.isEmpty() ? data.firstStartMin : monday.get(0).startMin; }
-            else if (i == monday.size()) { gs = monday.get(i - 1).endMin; ge = monday.get(i - 1).endMin; }
-            else { gs = monday.get(i - 1).endMin; ge = monday.get(i).startMin; }
-            if (ge - gs > 0) gaps.add(new long[]{gs, ge});
-        }
-        lastEnd = monday.isEmpty() ? data.firstStartMin : monday.get(monday.size() - 1).endMin;
-
-        // 非课程带
+        List<RenderedCell> bands = new ArrayList<>();
         for (RenderedCell c : monday) {
             if (c.type == TYPE_NONCOURSE) {
+                bands.add(c);
                 result.add(new RenderedCell(day, TYPE_NONCOURSE, c.refId, c.startMin, c.endMin));
             }
         }
-        // 本天课程（按存储顺序）
+        // 本天课程（按存储顺序）：从周一起始时间顺序放置，遇到贯穿全周的非课程带则跳过后继续
         List<ScheduleEntry> dayCourses = new ArrayList<>();
         for (ScheduleEntry e : data.entries) {
             if (e.day == day && e.type == TYPE_COURSE) dayCourses.add(e);
         }
-        int si = 0;
-        long placedBefore = Long.MIN_VALUE;
-        long tailEnd = lastEnd;
+        int t = data.firstStartMin;
         for (ScheduleEntry e : dayCourses) {
             int dur = data.lessonDurationMin;
-            boolean placed = false;
-            int start = 0, end = 0;
-            while (si < gaps.size()) {
-                long[] s = gaps.get(si);
-                long availStart = Math.max(s[0], placedBefore);
-                if (s[1] - availStart >= dur) {
-                    start = (int) availStart;
-                    end = start + dur;
-                    placedBefore = end;
-                    if (end >= s[1]) si++;
-                    placed = true;
-                    break;
-                } else {
-                    si++;
+            int start = t, end = t + dur;
+            boolean overlap = true;
+            while (overlap) {
+                overlap = false;
+                for (RenderedCell b : bands) {
+                    if (end > b.startMin && start < b.endMin) {
+                        start = b.endMin;
+                        end = start + dur;
+                        overlap = true;
+                        break;
+                    }
                 }
             }
-            if (!placed) {
-                start = (int) tailEnd;
-                end = start + dur;
-                tailEnd = end;
-                placedBefore = end;
-            }
             result.add(new RenderedCell(day, TYPE_COURSE, e.refId, start, end));
+            t = end;
         }
         Collections.sort(result, new Comparator<RenderedCell>() {
             @Override

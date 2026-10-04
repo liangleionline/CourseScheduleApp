@@ -41,8 +41,8 @@ public class TimetableView extends View {
 
     private static final String[] DAY_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
 
-    /** 非课程格子与课程格子的高度比（按用户截图比例约为 0.75） */
-    private static final float NONCOURSE_RATIO = 0.75f;
+    /** 非课程格子与课程格子的高度比 */
+    private static final float NONCOURSE_RATIO = 0.5f;
 
     private static class Row {
         final int start;

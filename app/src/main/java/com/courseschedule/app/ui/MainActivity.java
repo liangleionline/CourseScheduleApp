@@ -75,15 +75,35 @@ public class MainActivity extends AppCompatActivity {
 
         // 课表区（填满可用区域，行高按可用高度均分，尽量一屏放下）
         timetable = new TimetableView(this, null);
-        timetable.setListener(this::onCellClick);
+        timetable.setListener(new TimetableView.Listener() {
+            @Override
+            public void onCellClick(int day, int type, String refId, int startMin, int endMin) {
+                showDetail(day, type, refId, startMin, endMin);
+            }
+
+            @Override
+            public void onPeekStart() {
+                hideDetail();
+            }
+        });
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
         tl.weight = 1;
         content.addView(timetable, tl);
 
+        // 课程详情面板（底部，默认隐藏）
+        detailPanel = new LinearLayout(this);
+        detailPanel.setOrientation(LinearLayout.VERTICAL);
+        detailPanel.setVisibility(View.GONE);
+        detailPanel.setPadding(dp(16), dp(10), dp(16), dp(12));
+        detailPanel.setBackgroundColor(0xFFFFFFFF);
+        content.addView(detailPanel, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        buildDetailPanel();
+
         // 底部提示
         TextView footer = new TextView(this);
-        footer.setText("点击任意格可编辑 · 非课程项为贯穿全周项目");
+        footer.setText("点击课程查看详情 · 按住下拉可查看贯穿全周的非课程项");
         footer.setTextColor(0xFF8A94A6);
         footer.setTextSize(12);
         footer.setGravity(Gravity.CENTER);
@@ -138,6 +158,7 @@ public class MainActivity extends AppCompatActivity {
         timetable.setData(data);
         timetable.setVisibility(has ? View.VISIBLE : View.GONE);
         emptyView.setVisibility(has ? View.GONE : View.VISIBLE);
+        hideDetail();
     }
 
     @Override
@@ -158,6 +179,100 @@ public class MainActivity extends AppCompatActivity {
         } else {
             showNonCourseEditDialog(refId);
         }
+    }
+
+    // ---------- 课程详情面板 ----------
+    private LinearLayout detailPanel;
+    private TextView detailName, detailMeta, detailExtra;
+    private int detailDay, detailType;
+    private String detailRefId;
+
+    private void buildDetailPanel() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        detailName = new TextView(this);
+        detailName.setTextSize(17);
+        detailName.setTypeface(null, Typeface.BOLD);
+        detailName.setTextColor(0xFF3A4151);
+        detailName.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(detailName);
+
+        TextView edit = new TextView(this);
+        edit.setText("编辑");
+        edit.setTextSize(14);
+        edit.setTextColor(0xFF5C6BC0);
+        edit.setGravity(Gravity.CENTER);
+        edit.setPadding(dp(14), dp(6), dp(14), dp(6));
+        edit.setBackground(roundedBg(0xFFEDF1F8));
+        edit.setOnClickListener(v -> {
+            if (detailType == TimetableEngine.TYPE_COURSE) {
+                showCourseEditDialog(detailDay, detailRefId);
+            } else {
+                showNonCourseEditDialog(detailRefId);
+            }
+        });
+        row.addView(edit);
+
+        TextView close = new TextView(this);
+        close.setText("✕");
+        close.setTextSize(16);
+        close.setTextColor(0xFF8A94A6);
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(dp(10), dp(6), dp(4), dp(6));
+        close.setOnClickListener(v -> hideDetail());
+        row.addView(close);
+        detailPanel.addView(row, lpWrap());
+
+        detailMeta = new TextView(this);
+        detailMeta.setTextSize(13);
+        detailMeta.setTextColor(0xFF5C6BC0);
+        detailMeta.setPadding(0, dp(4), 0, 0);
+        detailPanel.addView(detailMeta, lpWrap());
+
+        detailExtra = new TextView(this);
+        detailExtra.setTextSize(13);
+        detailExtra.setTextColor(0xFF8A94A6);
+        detailExtra.setPadding(0, dp(4), 0, 0);
+        detailPanel.addView(detailExtra, lpWrap());
+    }
+
+    private void showDetail(int day, int type, String refId, int startMin, int endMin) {
+        detailDay = day;
+        detailType = type;
+        detailRefId = refId;
+        String name = "";
+        String meta = "";
+        String extra = "";
+        if (type == TimetableEngine.TYPE_COURSE) {
+            Course c = data.getCourse(refId);
+            if (c != null) {
+                name = c.name;
+                meta = c.teacher == null || c.teacher.isEmpty() ? "暂无教师" : "教师：" + c.teacher;
+            }
+        } else {
+            NonCourseItem n = data.getNonCourse(refId);
+            if (n != null) name = n.name;
+        }
+        String week = WEEK_NAMES[day - 1];
+        String time = fmt(startMin) + " - " + fmt(endMin);
+        extra = week + " · " + time + "（非课程项为贯穿全周项目）";
+        if (type == TimetableEngine.TYPE_COURSE) {
+            extra = week + " · " + time;
+        }
+        detailName.setText(name);
+        detailMeta.setText(meta);
+        detailExtra.setText(extra);
+        detailPanel.setVisibility(View.VISIBLE);
+    }
+
+    private void hideDetail() {
+        detailPanel.setVisibility(View.GONE);
+    }
+
+    private String fmt(int m) {
+        return String.format("%02d:%02d", m / 60, m % 60);
     }
 
     private void showCourseEditDialog(int day, String refId) {
@@ -246,7 +361,16 @@ public class MainActivity extends AppCompatActivity {
         refresh();
     }
 
-    private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density);
+    private static final String[] WEEK_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+
+    private int dp(int v) {        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedBg(int color) {
+        android.graphics.drawable.GradientDrawable g =
+                new android.graphics.drawable.GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(dp(10));
+        return g;
     }
 }

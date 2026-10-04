@@ -9,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -74,16 +73,13 @@ public class MainActivity extends AppCompatActivity {
         settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settingsBtn);
 
-        // 课表区（放入可滚动容器，行多时也可滚动到底）
-        ScrollView timetableScroll = new ScrollView(this);
-        timetableScroll.setFillViewport(true);
-        timetableScroll.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-        content.addView(timetableScroll);
-
+        // 课表区（填满可用区域，行高按可用高度均分，尽量一屏放下）
         timetable = new TimetableView(this, null);
         timetable.setListener(this::onCellClick);
-        timetableScroll.addView(timetable);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0);
+        tl.weight = 1;
+        content.addView(timetable, tl);
 
         // 底部提示
         TextView footer = new TextView(this);

@@ -118,25 +118,6 @@ public class TimetableView extends View {
     }
 
     @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int w = MeasureSpec.getSize(widthMeasureSpec);
-        int mode = MeasureSpec.getMode(heightMeasureSpec);
-        int hSize = MeasureSpec.getSize(heightMeasureSpec);
-        int n = rows.size();
-        int contentH;
-        if (mode == MeasureSpec.UNSPECIFIED || hSize == 0) {
-            // 在 ScrollView 中：按固定行高撑出内容高度，超长时可滚动
-            contentH = (int) (headerH + 2 * pad + n * dp(44));
-        } else {
-            // 有界高度：行高压缩填满一屏（下限较小，尽量一屏放下）
-            float avail = hSize - headerH - 2 * pad;
-            float rh = n == 0 ? dp(44) : Math.max(dp(32), avail / n);
-            contentH = (int) (headerH + 2 * pad + n * rh);
-        }
-        setMeasuredDimension(w, Math.max(contentH, (int) (headerH + 2 * pad)));
-    }
-
-    @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float w = getWidth(), h = getHeight();
@@ -148,7 +129,8 @@ public class TimetableView extends View {
 
         int n = rows.size();
         float avail = h - headerH - 2 * pad;
-        rowH = n == 0 ? dp(44) : Math.max(dp(32), avail / n);
+        // 行高按可用高度均分，填满一屏（下限很小，尽量一屏放下全部课程）
+        rowH = n == 0 ? dp(44) : Math.max(dp(16), avail / n);
 
         drawHeader(canvas, dayAreaX);
 
@@ -174,7 +156,10 @@ public class TimetableView extends View {
                 for (RenderedCell cell : row.dayCells.values()) {
                     if (cell.type == TimetableEngine.TYPE_NONCOURSE) { band = cell; break; }
                 }
-                rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rowH - 1);
+                // 非课程格子压矮（约占行的 55%），居中显示，视觉上更窄
+                float bandH = Math.max(dp(18), rowH * 0.55f);
+                float by = y + (rowH - bandH) / 2f;
+                rect.set(dayAreaX + 2, by + 1, w - pad - 2, by + bandH - 1);
                 cellPaint.setColor(ColorUtil.NONCOURSE_BG);
                 canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
                         8 * getResources().getDisplayMetrics().density, cellPaint);

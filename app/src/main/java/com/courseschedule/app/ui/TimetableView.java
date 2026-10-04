@@ -137,14 +137,10 @@ public class TimetableView extends View {
                 float top = yOf(cell.startMin);
                 float bot = yOf(cell.endMin);
                 if (cell.type == TimetableEngine.TYPE_NONCOURSE) {
-                    // 非课程带最小高度，避免过窄拥挤（在时间中点上下均衡扩展）
-                    float minH = 26 * getResources().getDisplayMetrics().density;
-                    float bandH = bot - top;
-                    if (bandH < minH) {
-                        float extra = minH - bandH;
-                        top -= extra / 2f;
-                        bot += extra / 2f;
-                    }
+                    // 非课程项固定高度，与时长无关（午休等长时段也不撑高）
+                    float bandH = 30 * getResources().getDisplayMetrics().density;
+                    top = yOf(cell.startMin);
+                    bot = top + bandH;
                     rect.set(dayAreaX + 2, top + 1, w - pad - 2, bot - 1);
                     cellPaint.setColor(ColorUtil.NONCOURSE_BG);
                     canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,

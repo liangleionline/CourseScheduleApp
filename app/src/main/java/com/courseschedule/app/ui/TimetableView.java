@@ -235,11 +235,18 @@ public class TimetableView extends View {
                 for (RenderedCell cell : row.dayCells.values()) {
                     if (cell.type == TimetableEngine.TYPE_NONCOURSE) { bandCell = cell; break; }
                 }
+                // 随收起进度淡出，消除收起最后一瞬的文字闪烁
+                float fade = reveal;
+                int bandAlpha = (int) (255 * Math.min(1f, fade));
                 rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rh - 1);
-                cellPaint.setColor(ColorUtil.NONCOURSE_BG);
+                cellPaint.setColor(adjustAlpha(ColorUtil.NONCOURSE_BG, bandAlpha));
                 canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
                         8 * getResources().getDisplayMetrics().density, cellPaint);
-                drawCellText(canvas, rect, cellName(bandCell), "", ColorUtil.NONCOURSE_TEXT, true);
+                // 高度不足以容纳文字或已基本淡出时，不绘制文字，避免极小尺寸渲染闪烁
+                if (rh >= dp(14) && fade > 0.05f) {
+                    drawCellText(canvas, rect, cellName(bandCell), "",
+                            adjustAlpha(ColorUtil.NONCOURSE_TEXT, (int) (255 * fade)), true);
+                }
             } else {
                 for (int idx = 0; idx < days.size(); idx++) {
                     int day = days.get(idx);

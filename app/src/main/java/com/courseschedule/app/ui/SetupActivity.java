@@ -77,6 +77,17 @@ public class SetupActivity extends AppCompatActivity {
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
 
+        // 固定操作栏：仅步骤④使用，保持在顶部、不随内容滚动
+        LinearLayout actionBar = null;
+        if (step == 4) {
+            actionBar = new LinearLayout(this);
+            actionBar.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            alp.bottomMargin = dp(8);
+            root.addView(actionBar, alp);
+        }
+
         ScrollView sv = new ScrollView(this);
         sv.setFillViewport(true);
         sv.setLayoutParams(new LinearLayout.LayoutParams(
@@ -87,7 +98,7 @@ public class SetupActivity extends AppCompatActivity {
         if (step == 1) renderStep1();
         else if (step == 2) renderStep2();
         else if (step == 3) renderStep3();
-        else renderStep4();
+        else renderStep4(actionBar);
 
         // 底部操作
         LinearLayout bottom = new LinearLayout(this);
@@ -354,7 +365,22 @@ public class SetupActivity extends AppCompatActivity {
     }
 
     // ---------- 步骤4：排布课表 ----------
-    private void renderStep4() {
+    private void renderStep4(LinearLayout actionBar) {
+        // 固定操作栏：添加按钮，不随内容滚动，始终可点
+        boolean firstMonday = scheduleDay == 1 && mondayEmpty();
+        MaterialButton add = new MaterialButton(this);
+        if (scheduleDay == 1 && firstMonday) {
+            add.setText("＋ 添加今日首个项目（需选开始时间）");
+        } else if (scheduleDay == 1) {
+            add.setText("＋ 继续添加剩余项目");
+        } else {
+            add.setText("＋ 添加课程");
+        }
+        add.setTextColor(Color.WHITE);
+        add.setBackgroundColor(0xFF5C6BC0);
+        add.setOnClickListener(v -> showAddItemDialog());
+        actionBar.addView(add, lpWrap());
+
         // 周一模板预览（贯穿全周的非课程项说明）
         if (scheduleDay > 1) {
             TextView auto = new TextView(this);
@@ -377,14 +403,6 @@ public class SetupActivity extends AppCompatActivity {
             autoList.setPadding(0, dp(2), 0, dp(10));
             body.addView(autoList);
         }
-
-        MaterialButton add = new MaterialButton(this);
-        if (scheduleDay == 1) add.setText("＋ 添加今日首个项目（需选开始时间）");
-        else add.setText("＋ 添加课程");
-        add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF5C6BC0);
-        add.setOnClickListener(v -> showAddItemDialog());
-        body.addView(add, lpMargins(0, 0, 0, dp(10)));
 
         List<ScheduleEntry> dayEntries = new ArrayList<>();
         for (ScheduleEntry e : data.entries) {

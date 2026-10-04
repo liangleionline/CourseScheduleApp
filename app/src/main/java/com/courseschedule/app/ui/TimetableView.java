@@ -9,6 +9,7 @@ import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.ColorUtil;
@@ -128,9 +129,12 @@ public class TimetableView extends View {
         float dayAreaX = timeAxisW + pad;
 
         int n = rows.size();
-        float avail = h - headerH - 2 * pad;
-        // 行高按可用高度均分，填满一屏（下限很小，尽量一屏放下全部课程）
-        rowH = n == 0 ? dp(44) : Math.max(dp(16), avail / n);
+        // 依据屏幕高度按比例预算课表区域，适配不同机型，保证一屏放下全部课程
+        float screenH = getResources().getDisplayMetrics().heightPixels;
+        float viewAvail = h - headerH - 2 * pad;
+        float budgetAvail = screenH * 0.85f - headerH - 2 * pad;
+        float avail = Math.min(viewAvail, budgetAvail);
+        rowH = n == 0 ? dp(44) : avail / n;
 
         drawHeader(canvas, dayAreaX);
 
@@ -247,23 +251,44 @@ public class TimetableView extends View {
         subPaint.setTextSize(subBaseSize);
     }
 
+    private float downX, downY;
+    private boolean moved;
+    private final int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP && listener != null && data != null) {
-            float x = event.getX(), y = event.getY();
-            float dayAreaX = timeAxisW + pad;
-            float w = getWidth();
-            if (w <= 0 || days.isEmpty() || colW <= 0 || rows.isEmpty()) return true;
-            if (y < headerH + pad) return true;
-            int rowIndex = (int) ((y - headerH - pad) / rowH);
-            if (rowIndex < 0 || rowIndex >= rows.size()) return true;
-            int col = (int) ((x - dayAreaX) / colW);
-            if (col < 0 || col >= days.size()) return true;
-            int day = days.get(col);
-            RenderedCell cell = rows.get(rowIndex).dayCells.get(day);
-            if (cell != null) {
-                listener.onCellClick(day, cell.type, cell.refId);
-            }
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downX = event.getX();
+                downY = event.getY();
+                moved = false;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!moved) {
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (dx * dx + dy * dy > touchSlop * touchSlop) moved = true;
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                // 只有真正的轻点（未移动超过阈值）才触发编辑，滑动抬起不误触
+                if (!moved && listener != null && data != null) {
+                    float x = event.getX(), y = event.getY();
+                    float dayAreaX = timeAxisW + pad;
+                    float w = getWidth();
+                    if (w <= 0 || days.isEmpty() || colW <= 0 || rows.isEmpty()) break;
+                    if (y < headerH + pad) break;
+                    int rowIndex = (int) ((y - headerH - pad) / rowH);
+                    if (rowIndex < 0 || rowIndex >= rows.size()) break;
+                    int col = (int) ((x - dayAreaX) / colW);
+                    if (col < 0 || col >= days.size()) break;
+                    int day = days.get(col);
+                    RenderedCell cell = rows.get(rowIndex).dayCells.get(day);
+                    if (cell != null) {
+                        listener.onCellClick(day, cell.type, cell.refId);
+                    }
+                }
+                break;
         }
         return true;
     }

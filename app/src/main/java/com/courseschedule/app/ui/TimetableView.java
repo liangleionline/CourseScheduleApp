@@ -41,6 +41,9 @@ public class TimetableView extends View {
 
     private static final String[] DAY_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
 
+    /** 非课程格子与课程格子的高度比（按用户截图比例约为 0.75） */
+    private static final float NONCOURSE_RATIO = 0.75f;
+
     private static class Row {
         final int start;
         final Map<Integer, RenderedCell> dayCells = new LinkedHashMap<>();
@@ -192,10 +195,22 @@ public class TimetableView extends View {
         float avail = Math.min(viewAvail, budgetAvail);
 
         float reveal = clampedReveal();
-        float effective = courseRowCount() + bandRowCount() * reveal;
-        if (effective <= 0) return;
-        rowH = avail / effective;
-        bandH = rowH * reveal;
+        int cc = courseRowCount();
+        int bc = bandRowCount();
+        if (cc <= 0 || (bc <= 0 && cc <= 0)) return;
+        if (bc <= 0) {
+            rowH = avail / cc;
+            bandH = 0;
+        } else {
+            // 非课程与课程格子的高度比（按用户截图比例：非课程约为课程的 0.75）
+            float ratio = NONCOURSE_RATIO;
+            // 收起（reveal=0）：课程高度铺满；完全展开（reveal=1）：课程压缩到 xFull、非课程为 ratio*xFull
+            float x0 = avail / cc;
+            float xFull = avail / (cc + bc * ratio);
+            // 下拉时：课程随 reveal 从 x0 线性压缩到 xFull，非课程从 0 线性拉伸到 ratio*xFull
+            rowH = x0 - (x0 - xFull) * reveal;
+            bandH = ratio * xFull * reveal;
+        }
 
         drawHeader(canvas, dayAreaX);
 

@@ -62,6 +62,8 @@ public class TimetableView extends View {
 
     public TimetableView(Context c, AttributeSet a) { super(c, a); init(); }
 
+    private float nameBaseSize, subBaseSize;
+
     private void init() {
         float d = getResources().getDisplayMetrics().density;
         pad = 8 * d;
@@ -81,6 +83,8 @@ public class TimetableView extends View {
         dayPaint.setTextAlign(Paint.Align.CENTER);
         timePaint.setTextSize(10 * d);
         timePaint.setTextAlign(Paint.Align.CENTER);
+        nameBaseSize = namePaint.getTextSize();
+        subBaseSize = subPaint.getTextSize();
         setLayerType(View.LAYER_TYPE_SOFTWARE, null);
     }
 
@@ -114,6 +118,25 @@ public class TimetableView extends View {
     }
 
     @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int w = MeasureSpec.getSize(widthMeasureSpec);
+        int mode = MeasureSpec.getMode(heightMeasureSpec);
+        int hSize = MeasureSpec.getSize(heightMeasureSpec);
+        int n = rows.size();
+        int contentH;
+        if (mode == MeasureSpec.UNSPECIFIED || hSize == 0) {
+            // 在 ScrollView 中：按固定行高撑出内容高度，超长时可滚动
+            contentH = (int) (headerH + 2 * pad + n * dp(44));
+        } else {
+            // 有界高度：行高压缩填满一屏（下限较小，尽量一屏放下）
+            float avail = hSize - headerH - 2 * pad;
+            float rh = n == 0 ? dp(44) : Math.max(dp(32), avail / n);
+            contentH = (int) (headerH + 2 * pad + n * rh);
+        }
+        setMeasuredDimension(w, Math.max(contentH, (int) (headerH + 2 * pad)));
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float w = getWidth(), h = getHeight();
@@ -125,7 +148,7 @@ public class TimetableView extends View {
 
         int n = rows.size();
         float avail = h - headerH - 2 * pad;
-        rowH = n == 0 ? dp(48) : Math.max(dp(46), avail / n);
+        rowH = n == 0 ? dp(44) : Math.max(dp(32), avail / n);
 
         drawHeader(canvas, dayAreaX);
 
@@ -211,17 +234,32 @@ public class TimetableView extends View {
     private void drawCellText(Canvas canvas, RectF r, String name, String sub, int color, boolean isNon) {
         namePaint.setColor(color);
         subPaint.setColor(adjustAlpha(color, isNon ? 200 : 235));
-        float cy = r.centerY();
+        // 长课程名（≥4字）拆成两行，避免挤在一行
+        String[] nameLines = (!isNon && name.length() >= 4)
+                ? new String[]{name.substring(0, (name.length() + 1) / 2), name.substring((name.length() + 1) / 2)}
+                : new String[]{name};
         boolean hasSub = sub != null && !sub.isEmpty();
-        float nameY;
-        if (hasSub) {
-            nameY = cy - namePaint.getTextSize() * 0.5f;
-            canvas.drawText(name, r.centerX(), nameY, namePaint);
-            canvas.drawText(sub, r.centerX(), nameY + namePaint.getTextSize() * 0.2f + subPaint.getTextSize(), subPaint);
-        } else {
-            nameY = cy + namePaint.getTextSize() * 0.35f;
-            canvas.drawText(name, r.centerX(), nameY, namePaint);
+        int totalLines = nameLines.length + (hasSub ? 1 : 0);
+        float base = nameBaseSize;
+        float spacing = base * 1.18f;
+        float maxH = r.height() * 0.92f;
+        float needH = totalLines * spacing;
+        float scale = Math.min(1f, maxH / needH);
+        float fs = base * scale;
+        namePaint.setTextSize(fs);
+        subPaint.setTextSize(subBaseSize * scale);
+        float lineH = fs * 1.18f;
+        float y = r.centerY() - (totalLines - 1) * lineH / 2f + fs * 0.36f;
+        for (String ln : nameLines) {
+            canvas.drawText(ln, r.centerX(), y, namePaint);
+            y += lineH;
         }
+        if (hasSub) {
+            canvas.drawText(sub, r.centerX(), y, subPaint);
+        }
+        // 恢复字号，避免影响后续绘制
+        namePaint.setTextSize(nameBaseSize);
+        subPaint.setTextSize(subBaseSize);
     }
 
     @Override

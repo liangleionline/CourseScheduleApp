@@ -17,11 +17,17 @@ import com.courseschedule.app.data.RenderedCell;
 import com.courseschedule.app.data.TimetableEngine;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
-/** 周课程表视图：横向星期、纵向时间，非课程项横向贯穿全周 */
+/**
+ * 周课程表视图：统一行高网格。
+ * 每一行对应一个「开始时间」，课程与非课程各占一行、行高一致、行与行首尾相接。
+ * 非课程项（贯穿全周）横向铺满整行；课程按天显示在对应列。
+ * 这样既不按时长撑高、无空洞，也不会重叠。
+ */
 public class TimetableView extends View {
 
     public interface Listener {
@@ -30,40 +36,40 @@ public class TimetableView extends View {
 
     private static final String[] DAY_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
 
+    /** 一行 = 一个开始时间；dayCells: 该开始时间下各天的格子 */
+    private static class Row {
+        final int start;
+        final Map<Integer, RenderedCell> dayCells = new LinkedHashMap<>();
+        Row(int start) { this.start = start; }
+    }
+
     private AppData data;
     private Listener listener;
     private List<Integer> days = new ArrayList<>();
-    private int minTime, maxTime;
+    private List<Row> rows = new ArrayList<>();
 
-    private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint cellPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint namePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint subPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint dayPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
 
-    private Map<Integer, List<RenderedCell>> cellCache = new HashMap<>();
-    private Map<String, Course> courseById = new HashMap<>();
+    private Map<String, Course> courseById = new LinkedHashMap<>();
 
-    private float pad, timeAxisW, headerH, colW, contentH;
+    private float pad, timeAxisW, headerH, colW, rowH;
 
     public TimetableView(Context c, AttributeSet a) { super(c, a); init(); }
 
     private void init() {
         float d = getResources().getDisplayMetrics().density;
         pad = 8 * d;
-        timeAxisW = 42 * d;
+        timeAxisW = 44 * d;
         headerH = 44 * d;
 
-        bgPaint.setColor(0xFFFFFFFF);
         linePaint.setColor(0xFFE6EAF0);
         linePaint.setStrokeWidth(1f * d);
-        gridPaint.setColor(0xFFF2F4F8);
-        gridPaint.setStyle(Paint.Style.STROKE);
-        gridPaint.setStrokeWidth(1f * d);
 
         namePaint.setTextSize(15 * d);
         namePaint.setFakeBoldText(true);
@@ -87,15 +93,20 @@ public class TimetableView extends View {
         if (data.showWeekend) { days.add(6); days.add(7); }
         courseById.clear();
         for (Course c : data.courses) courseById.put(c.id, c);
-        cellCache.clear();
-        for (int day : days) cellCache.put(day, TimetableEngine.computeDay(data, day));
-        int[] r = TimetableEngine.globalTimeRange(data, days);
-        minTime = r[0]; maxTime = Math.max(r[1], r[0] + 1);
-        invalidate();
-    }
 
-    private float yOf(int minute) {
-        return headerH + pad + (minute - minTime) * contentH / (float) (maxTime - minTime);
+        // 按开始时间建行：把各天的格子归入对应行
+        TreeMap<Integer, Row> rowMap = new TreeMap<>();
+        for (int day : days) {
+            List<RenderedCell> cells = TimetableEngine.computeDay(data, day);
+            for (RenderedCell cell : cells) {
+                Row r = rowMap.get(cell.startMin);
+                if (r == null) { r = new Row(cell.startMin); rowMap.put(cell.startMin, r); }
+                r.dayCells.put(day, cell);
+            }
+        }
+        rows.clear();
+        rows.addAll(rowMap.values());
+        invalidate();
     }
 
     private String fmt(int m) {
@@ -108,57 +119,65 @@ public class TimetableView extends View {
         float w = getWidth(), h = getHeight();
         canvas.drawColor(0xFFF6F8FC);
 
-        contentH = h - headerH - 2 * pad;
-        if (contentH <= 0 || days.isEmpty()) return;
+        if (days.isEmpty()) return;
         colW = (w - timeAxisW - 2 * pad) / days.size();
-
         float dayAreaX = timeAxisW + pad;
-        // 时间轴：只显示每个项目（课程/非课程）的开始时间，而非固定每小时
-        List<Integer> startTimes = new java.util.ArrayList<>();
-        for (int day : days) {
-            for (RenderedCell cell : cellCache.get(day)) {
-                int s = cell.startMin;
-                if (!startTimes.contains(s)) startTimes.add(s);
-            }
+
+        int n = rows.size();
+        float avail = h - headerH - 2 * pad;
+        rowH = n == 0 ? dp(48) : Math.max(dp(46), avail / n);
+
+        drawHeader(canvas, dayAreaX);
+
+        if (n == 0) {
+            timePaint.setColor(0xFF8A94A6);
+            canvas.drawText("暂无课表", (dayAreaX + w - pad) / 2f, headerH + pad + dp(20), timePaint);
+            return;
         }
-        java.util.Collections.sort(startTimes);
-        for (int m : startTimes) {
-            float y = yOf(m);
+
+        float y = headerH + pad;
+        for (Row row : rows) {
             canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
             timePaint.setColor(0xFF8A94A6);
-            canvas.drawText(fmt(m), timeAxisW / 2f, y - 3 * getResources().getDisplayMetrics().density, timePaint);
-        }
+            canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rowH / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
-        // 非课程贯穿全周条带 + 各天课程格
-        for (int idx = 0; idx < days.size(); idx++) {
-            int day = days.get(idx);
-            float x = dayAreaX + idx * colW;
-            for (RenderedCell cell : cellCache.get(day)) {
-                float top = yOf(cell.startMin);
-                float bot = yOf(cell.endMin);
-                if (cell.type == TimetableEngine.TYPE_NONCOURSE) {
-                    // 非课程项固定高度，与时长无关（午休等长时段也不撑高）
-                    float bandH = 30 * getResources().getDisplayMetrics().density;
-                    top = yOf(cell.startMin);
-                    bot = top + bandH;
-                    rect.set(dayAreaX + 2, top + 1, w - pad - 2, bot - 1);
-                    cellPaint.setColor(ColorUtil.NONCOURSE_BG);
-                    canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
-                            8 * getResources().getDisplayMetrics().density, cellPaint);
-                    drawCellText(canvas, rect, cellName(cell), "", ColorUtil.NONCOURSE_TEXT, true);
-                } else {
-                    Course c = courseById.get(cell.refId);
-                    if (c == null) continue;
-                    rect.set(x + 2, top + 1, x + colW - 2, bot - 1);
-                    cellPaint.setColor(c.bgColor);
-                    canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
-                            8 * getResources().getDisplayMetrics().density, cellPaint);
-                    drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
-                }
+            // 非课程带：整行铺满（贯穿全周）
+            boolean hasBand = false;
+            for (RenderedCell cell : row.dayCells.values()) {
+                if (cell.type == TimetableEngine.TYPE_NONCOURSE) { hasBand = true; break; }
             }
-        }
+            if (hasBand) {
+                RenderedCell band = null;
+                for (RenderedCell cell : row.dayCells.values()) {
+                    if (cell.type == TimetableEngine.TYPE_NONCOURSE) { band = cell; break; }
+                }
+                rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rowH - 1);
+                cellPaint.setColor(ColorUtil.NONCOURSE_BG);
+                canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
+                        8 * getResources().getDisplayMetrics().density, cellPaint);
+                drawCellText(canvas, rect, cellName(band), "", ColorUtil.NONCOURSE_TEXT, true);
+            }
 
-        // 表头
+            // 各天课程格
+            for (int idx = 0; idx < days.size(); idx++) {
+                int day = days.get(idx);
+                RenderedCell cell = row.dayCells.get(day);
+                if (cell == null || cell.type == TimetableEngine.TYPE_NONCOURSE) continue;
+                Course c = courseById.get(cell.refId);
+                if (c == null) continue;
+                float x = dayAreaX + idx * colW;
+                rect.set(x + 2, y + 1, x + colW - 2, y + rowH - 1);
+                cellPaint.setColor(c.bgColor);
+                canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
+                        8 * getResources().getDisplayMetrics().density, cellPaint);
+                drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
+            }
+            y += rowH;
+        }
+        canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+    }
+
+    private void drawHeader(Canvas canvas, float dayAreaX) {
         for (int idx = 0; idx < days.size(); idx++) {
             int day = days.get(idx);
             float x = dayAreaX + idx * colW;
@@ -211,19 +230,16 @@ public class TimetableView extends View {
             float x = event.getX(), y = event.getY();
             float dayAreaX = timeAxisW + pad;
             float w = getWidth();
-            if (w <= 0 || days.isEmpty() || colW <= 0) return true;
+            if (w <= 0 || days.isEmpty() || colW <= 0 || rows.isEmpty()) return true;
+            if (y < headerH + pad) return true;
+            int rowIndex = (int) ((y - headerH - pad) / rowH);
+            if (rowIndex < 0 || rowIndex >= rows.size()) return true;
             int col = (int) ((x - dayAreaX) / colW);
             if (col < 0 || col >= days.size()) return true;
             int day = days.get(col);
-            // 时间轴区间限制
-            if (y < headerH) return true;
-            contentH = getHeight() - headerH - 2 * pad;
-            int minute = minTime + (int) ((y - headerH - pad) * (maxTime - minTime) / contentH);
-            for (RenderedCell cell : cellCache.get(day)) {
-                if (minute >= cell.startMin && minute < cell.endMin) {
-                    listener.onCellClick(day, cell.type, cell.refId);
-                    return true;
-                }
+            RenderedCell cell = rows.get(rowIndex).dayCells.get(day);
+            if (cell != null) {
+                listener.onCellClick(day, cell.type, cell.refId);
             }
         }
         return true;
@@ -231,5 +247,9 @@ public class TimetableView extends View {
 
     private int adjustAlpha(int color, int alpha) {
         return (color & 0x00FFFFFF) | (alpha << 24);
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
     }
 }

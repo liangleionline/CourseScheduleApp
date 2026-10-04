@@ -49,7 +49,6 @@ public class TimetableView extends View {
     private Map<String, Course> courseById = new HashMap<>();
 
     private float pad, timeAxisW, headerH, colW, contentH;
-    private int hourLines;
 
     public TimetableView(Context c, AttributeSet a) { super(c, a); init(); }
 
@@ -92,7 +91,6 @@ public class TimetableView extends View {
         for (int day : days) cellCache.put(day, TimetableEngine.computeDay(data, day));
         int[] r = TimetableEngine.globalTimeRange(data, days);
         minTime = r[0]; maxTime = Math.max(r[1], r[0] + 1);
-        hourLines = (maxTime - minTime) / 60 + 1;
         invalidate();
     }
 
@@ -115,9 +113,16 @@ public class TimetableView extends View {
         colW = (w - timeAxisW - 2 * pad) / days.size();
 
         float dayAreaX = timeAxisW + pad;
-        // 时间轴刻度
-        for (int i = 0; i <= hourLines; i++) {
-            int m = minTime + i * 60;
+        // 时间轴：只显示每个项目（课程/非课程）的开始时间，而非固定每小时
+        List<Integer> startTimes = new java.util.ArrayList<>();
+        for (int day : days) {
+            for (RenderedCell cell : cellCache.get(day)) {
+                int s = cell.startMin;
+                if (!startTimes.contains(s)) startTimes.add(s);
+            }
+        }
+        java.util.Collections.sort(startTimes);
+        for (int m : startTimes) {
             float y = yOf(m);
             canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
             timePaint.setColor(0xFF8A94A6);
@@ -132,12 +137,19 @@ public class TimetableView extends View {
                 float top = yOf(cell.startMin);
                 float bot = yOf(cell.endMin);
                 if (cell.type == TimetableEngine.TYPE_NONCOURSE) {
+                    // 非课程带最小高度，避免过窄拥挤（在时间中点上下均衡扩展）
+                    float minH = 26 * getResources().getDisplayMetrics().density;
+                    float bandH = bot - top;
+                    if (bandH < minH) {
+                        float extra = minH - bandH;
+                        top -= extra / 2f;
+                        bot += extra / 2f;
+                    }
                     rect.set(dayAreaX + 2, top + 1, w - pad - 2, bot - 1);
                     cellPaint.setColor(ColorUtil.NONCOURSE_BG);
                     canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
                             8 * getResources().getDisplayMetrics().density, cellPaint);
-                    drawCellText(canvas, rect, cellName(cell), "", ColorUtil.NONCOURSE_TEXT, true,
-                            fmt(cell.startMin) + "-" + fmt(cell.endMin));
+                    drawCellText(canvas, rect, cellName(cell), "", ColorUtil.NONCOURSE_TEXT, true);
                 } else {
                     Course c = courseById.get(cell.refId);
                     if (c == null) continue;
@@ -145,8 +157,7 @@ public class TimetableView extends View {
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
                             8 * getResources().getDisplayMetrics().density, cellPaint);
-                    drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false,
-                            fmt(cell.startMin) + "-" + fmt(cell.endMin));
+                    drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
                 }
             }
         }
@@ -182,8 +193,7 @@ public class TimetableView extends View {
         return c == null ? "" : c.name;
     }
 
-    private void drawCellText(Canvas canvas, RectF r, String name, String sub, int color, boolean isNon, String timeLabel) {
-        float d = getResources().getDisplayMetrics().density;
+    private void drawCellText(Canvas canvas, RectF r, String name, String sub, int color, boolean isNon) {
         namePaint.setColor(color);
         subPaint.setColor(adjustAlpha(color, isNon ? 200 : 235));
         float cy = r.centerY();
@@ -196,11 +206,6 @@ public class TimetableView extends View {
         } else {
             nameY = cy + namePaint.getTextSize() * 0.35f;
             canvas.drawText(name, r.centerX(), nameY, namePaint);
-        }
-        // 时间小字
-        if (timeLabel != null && !timeLabel.isEmpty()) {
-            timePaint.setColor(adjustAlpha(color, isNon ? 180 : 225));
-            canvas.drawText(timeLabel, r.centerX(), r.bottom - 4 * d, timePaint);
         }
     }
 

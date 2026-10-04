@@ -76,8 +76,13 @@ public class SetupActivity extends AppCompatActivity {
 
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        root.addView(body, new LinearLayout.LayoutParams(
+
+        ScrollView sv = new ScrollView(this);
+        sv.setFillViewport(true);
+        sv.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        sv.addView(body);
+        root.addView(sv);
 
         if (step == 1) renderStep1();
         else if (step == 2) renderStep2();
@@ -239,7 +244,6 @@ public class SetupActivity extends AppCompatActivity {
         et.setTextSize(18);
         card.addView(et, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        body.addView(card);
 
         TextView note = hintText("所有课程统一使用该时长，例如 45 分钟");
         body.addView(note);

@@ -73,6 +73,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         sectionTitle(inner, "数据");
         inner.addView(clearCard());
+        inner.addView(backupCard());
     }
 
     private void sectionTitle(LinearLayout parent, String s) {
@@ -340,6 +341,97 @@ public class SettingsActivity extends AppCompatActivity {
                 .show());
         c.addView(clear, lpTop(8));
         return c;
+    }
+
+    private View backupCard() {
+        LinearLayout c = card();
+        TextView hint = new TextView(this);
+        hint.setText("导出为单个文件，可在本机或换机时导入恢复全部数据（课程、非课程、课表排布与全局设置）。");
+        hint.setTextColor(0xFF8A94A6);
+        hint.setTextSize(13);
+        c.addView(hint);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        c.addView(row, lpTop(10));
+
+        MaterialButton exp = new MaterialButton(this);
+        exp.setText("导出数据");
+        exp.setTextColor(Color.WHITE);
+        exp.setBackgroundColor(0xFF5C6BC0);
+        exp.setOnClickListener(v -> exportData());
+        row.addView(exp, lpWrap());
+
+        MaterialButton imp = new MaterialButton(this);
+        imp.setText("导入数据");
+        imp.setTextColor(Color.WHITE);
+        imp.setBackgroundColor(0xFF26A69A);
+        LinearLayout.LayoutParams impLp = lpWrap();
+        impLp.leftMargin = dp(12);
+        imp.setOnClickListener(v -> importData());
+        row.addView(imp, impLp);
+        return c;
+    }
+
+    private static final int REQ_EXPORT = 1001;
+    private static final int REQ_IMPORT = 1002;
+
+    private void exportData() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        String stamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US)
+                .format(new java.util.Date());
+        intent.putExtra(Intent.EXTRA_TITLE, "课程表备份_" + stamp + ".json");
+        startActivityForResult(intent, REQ_EXPORT);
+    }
+
+    private void importData() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, REQ_IMPORT);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent dataIntent) {
+        super.onActivityResult(requestCode, resultCode, dataIntent);
+        if (resultCode != RESULT_OK || dataIntent == null || dataIntent.getData() == null) return;
+        android.net.Uri uri = dataIntent.getData();
+        try {
+            if (requestCode == REQ_EXPORT) {
+                java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                if (os != null) {
+                    os.write(data.exportJson().getBytes("UTF-8"));
+                    os.flush();
+                    os.close();
+                    toast("导出成功");
+                }
+            } else if (requestCode == REQ_IMPORT) {
+                java.io.InputStream is = getContentResolver().openInputStream(uri);
+                if (is != null) {
+                    String json = readAll(is);
+                    is.close();
+                    if (data.importJson(json)) {
+                        toast("导入成功，数据已恢复");
+                        render();
+                    } else {
+                        toast("导入失败：文件格式不正确");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            toast("操作失败：" + e.getMessage());
+        }
+    }
+
+    private String readAll(java.io.InputStream is) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = is.read(buf)) != -1) bos.write(buf, 0, n);
+        return bos.toString("UTF-8");
     }
 
     private void render() {

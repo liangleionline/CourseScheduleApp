@@ -120,40 +120,87 @@ public class AppData {
 
     public void persist() {
         try {
-            JSONObject root = new JSONObject();
-            root.put("lesson", lessonDurationMin);
-            root.put("firstStart", firstStartMin);
-            root.put("weekend", showWeekend);
-            root.put("seed", paletteSeed);
-
-            JSONArray cs = new JSONArray();
-            for (Course c : courses) {
-                JSONObject o = new JSONObject();
-                o.put("id", c.id); o.put("name", c.name); o.put("teacher", c.teacher);
-                o.put("bg", c.bgColor); o.put("tc", c.textColor);
-                cs.put(o);
-            }
-            root.put("courses", cs);
-
-            JSONArray ns = new JSONArray();
-            for (NonCourseItem n : nonCourses) {
-                JSONObject o = new JSONObject();
-                o.put("id", n.id); o.put("name", n.name); o.put("dur", n.durationMin);
-                ns.put(o);
-            }
-            root.put("non", ns);
-
-            JSONArray es = new JSONArray();
-            for (ScheduleEntry e : entries) {
-                JSONObject o = new JSONObject();
-                o.put("d", e.day); o.put("t", e.type); o.put("r", e.refId);
-                es.put(o);
-            }
-            root.put("entries", es);
-
-            prefs.edit().putString(KEY_DATA, root.toString()).apply();
+            prefs.edit().putString(KEY_DATA, toJson().toString()).apply();
         } catch (Exception ignored) {
         }
+    }
+
+    /** 导出全部数据（课程库、非课程库、排布、全局设置）为单个 JSON 字符串 */
+    public String exportJson() {
+        try {
+            return toJson().toString();
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    /** 从导出的 JSON 恢复全部数据（覆盖当前所有数据） */
+    public boolean importJson(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            lessonDurationMin = root.optInt("lesson", DEFAULT_LESSON);
+            firstStartMin = root.optInt("firstStart", DEFAULT_FIRST_START);
+            showWeekend = root.optBoolean("weekend", false);
+            paletteSeed = root.optLong("seed", 20260901L);
+
+            courses.clear();
+            JSONArray cs = root.optJSONArray("courses");
+            if (cs != null) for (int i = 0; i < cs.length(); i++) {
+                JSONObject o = cs.getJSONObject(i);
+                courses.add(new Course(o.getString("id"), o.optString("name"),
+                        o.optString("teacher"), o.optInt("bg"), o.optInt("tc")));
+            }
+            nonCourses.clear();
+            JSONArray ns = root.optJSONArray("non");
+            if (ns != null) for (int i = 0; i < ns.length(); i++) {
+                JSONObject o = ns.getJSONObject(i);
+                nonCourses.add(new NonCourseItem(o.getString("id"), o.optString("name"), o.optInt("dur")));
+            }
+            entries.clear();
+            JSONArray es = root.optJSONArray("entries");
+            if (es != null) for (int i = 0; i < es.length(); i++) {
+                JSONObject o = es.getJSONObject(i);
+                entries.add(new ScheduleEntry(o.getInt("d"), o.getInt("t"), o.getString("r")));
+            }
+            persist();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private JSONObject toJson() throws Exception {
+        JSONObject root = new JSONObject();
+        root.put("lesson", lessonDurationMin);
+        root.put("firstStart", firstStartMin);
+        root.put("weekend", showWeekend);
+        root.put("seed", paletteSeed);
+
+        JSONArray cs = new JSONArray();
+        for (Course c : courses) {
+            JSONObject o = new JSONObject();
+            o.put("id", c.id); o.put("name", c.name); o.put("teacher", c.teacher);
+            o.put("bg", c.bgColor); o.put("tc", c.textColor);
+            cs.put(o);
+        }
+        root.put("courses", cs);
+
+        JSONArray ns = new JSONArray();
+        for (NonCourseItem n : nonCourses) {
+            JSONObject o = new JSONObject();
+            o.put("id", n.id); o.put("name", n.name); o.put("dur", n.durationMin);
+            ns.put(o);
+        }
+        root.put("non", ns);
+
+        JSONArray es = new JSONArray();
+        for (ScheduleEntry e : entries) {
+            JSONObject o = new JSONObject();
+            o.put("d", e.day); o.put("t", e.type); o.put("r", e.refId);
+            es.put(o);
+        }
+        root.put("entries", es);
+        return root;
     }
 
     private void load() {

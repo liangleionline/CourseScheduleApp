@@ -540,7 +540,7 @@ public class TimetableView extends View {
                     float dy = event.getY() - downY;
                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                         moved = true;
-                        cancelLongPress();
+                        cancelLongPressTimer();
                         pressRelease(true); // 转为滑动/下拉，取消按压
                         resetFlip();        // 布局将变化，同时复位翻转磁贴
                     }
@@ -558,7 +558,7 @@ public class TimetableView extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                cancelLongPress();
+                cancelLongPressTimer();
                 if (moved) {
                     // 横向滑动切换课程表
                     float dx = event.getX() - downX;
@@ -601,7 +601,7 @@ public class TimetableView extends View {
         postDelayed(longPressRunnable, LONG_PRESS_MS);
     }
 
-    private void cancelLongPress() {
+    private void cancelLongPressTimer() {
         if (longPressRunnable != null) {
             removeCallbacks(longPressRunnable);
             longPressRunnable = null;

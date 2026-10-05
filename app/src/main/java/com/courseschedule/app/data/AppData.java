@@ -21,6 +21,7 @@ public class AppData {
     private static final int DEFAULT_FIRST_START = 8 * 60; // 08:00
 
     private static AppData instance;
+    private static Context appContext;
 
     /** 一个课程表：名称 + 各自的每日排布 */
     public static class Timetable {
@@ -44,7 +45,8 @@ public class AppData {
     private final SharedPreferences prefs;
 
     private AppData(Context ctx) {
-        prefs = ctx.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        appContext = ctx.getApplicationContext();
+        prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         load();
         syncEntriesRef();
     }
@@ -195,6 +197,11 @@ public class AppData {
     public void persist() {
         try {
             prefs.edit().putString(KEY_DATA, toJson().toString()).apply();
+        } catch (Exception ignored) {
+        }
+        // 数据变化后同步刷新桌面小组件
+        try {
+            if (appContext != null) com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(appContext);
         } catch (Exception ignored) {
         }
     }

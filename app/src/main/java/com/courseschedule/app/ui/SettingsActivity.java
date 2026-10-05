@@ -40,7 +40,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF2F2F2);
+        root.setBackgroundColor(0xFFF6F8FC);
         setContentView(root);
 
         ScrollView scroll = new ScrollView(this);
@@ -55,7 +55,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView title = new TextView(this);
         title.setText("设置");
-        title.setTextColor(0xFF1A1A1A);
+        title.setTextColor(0xFF3A4151);
         title.setTextSize(20);
         title.setTypeface(null, Typeface.BOLD);
         inner.addView(title);
@@ -86,14 +86,14 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView hint = new TextView(this);
         hint.setText("多孩家庭可为每个孩子各建一个课程表，首页左右滑动切换，顶部显示当前课程表名称。");
-        hint.setTextColor(0xFF666666);
+        hint.setTextColor(0xFF8A94A6);
         hint.setTextSize(13);
         c.addView(hint);
 
         MaterialButton add = new MaterialButton(this);
         add.setText("＋ 添加课程表");
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> askTimetableName("添加课程表", "", name -> {
             data.addTimetable(name);
             render();
@@ -115,7 +115,7 @@ public class SettingsActivity extends AppCompatActivity {
         TextView tv = new TextView(this);
         boolean active = t.id.equals(data.activeTimetableId);
         tv.setText((active ? "● " : "") + t.name);
-        tv.setTextColor(active ? 0xFF0078D7 : 0xFF1A1A1A);
+        tv.setTextColor(active ? 0xFF5C6BC0 : 0xFF3A4151);
         tv.setTextSize(15);
         tv.setTypeface(null, active ? Typeface.BOLD : Typeface.NORMAL);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -170,7 +170,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void sectionTitle(LinearLayout parent, String s) {
         TextView t = new TextView(this);
         t.setText(s);
-        t.setTextColor(0xFF0078D7);
+        t.setTextColor(0xFF5C6BC0);
         t.setTextSize(15);
         t.setTypeface(null, Typeface.BOLD);
         t.setPadding(0, dp(18), 0, dp(6));
@@ -196,14 +196,14 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView label = new TextView(this);
         label.setText("每节课时长（分钟）");
-        label.setTextColor(0xFF1A1A1A);
+        label.setTextColor(0xFF3A4151);
         label.setTextSize(15);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         EditText et = new EditText(this);
         et.setInputType(InputType.TYPE_CLASS_NUMBER);
         et.setText(String.valueOf(data.lessonDurationMin));
-        et.setTextColor(0xFF1A1A1A);
+        et.setTextColor(0xFF3A4151);
         et.setGravity(Gravity.END);
         row.addView(et, new LinearLayout.LayoutParams(dp(120), ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -224,7 +224,7 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialButton add = new MaterialButton(this);
         add.setText("＋ 添加课程");
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> showCourseEditDialog(null));
         c.addView(add, lpTop(6));
 
@@ -249,7 +249,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView tv = new TextView(this);
         tv.setText(course.teacher == null || course.teacher.isEmpty() ? course.name : course.name + " · " + course.teacher);
-        tv.setTextColor(0xFF1A1A1A);
+        tv.setTextColor(0xFF3A4151);
         tv.setTextSize(15);
         tv.setPadding(dp(10), 0, 0, 0);
         row.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -307,7 +307,7 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialButton add = new MaterialButton(this);
         add.setText("＋ 添加非课程项");
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> showNonCourseEditDialog(null));
         c.addView(add, lpTop(6));
 
@@ -329,7 +329,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView tv = new TextView(this);
         tv.setText(n.name + "（" + n.durationMin + "分钟）");
-        tv.setTextColor(0xFF1A1A1A);
+        tv.setTextColor(0xFF3A4151);
         tv.setTextSize(15);
         tv.setPadding(dp(10), 0, 0, 0);
         row.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -395,7 +395,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView label = new TextView(this);
         label.setText("显示周六、周日");
-        label.setTextColor(0xFF1A1A1A);
+        label.setTextColor(0xFF3A4151);
         label.setTextSize(15);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
@@ -413,7 +413,7 @@ public class SettingsActivity extends AppCompatActivity {
         LinearLayout c = card();
         TextView hint = new TextView(this);
         hint.setText("清空当前课程表的排布数据（保留课程库、非课程项库与全局设置），清空后可重新排布。");
-        hint.setTextColor(0xFF666666);
+        hint.setTextColor(0xFF8A94A6);
         hint.setTextSize(13);
         c.addView(hint);
 
@@ -438,7 +438,7 @@ public class SettingsActivity extends AppCompatActivity {
         LinearLayout c = card();
         TextView hint = new TextView(this);
         hint.setText("导出为单个文件，可在本机或换机时导入恢复全部数据（课程、非课程、课表排布与全局设置）。");
-        hint.setTextColor(0xFF666666);
+        hint.setTextColor(0xFF8A94A6);
         hint.setTextSize(13);
         c.addView(hint);
 
@@ -450,7 +450,7 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialButton exp = new MaterialButton(this);
         exp.setText("导出数据");
         exp.setTextColor(Color.WHITE);
-        exp.setBackgroundColor(0xFF0078D7);
+        exp.setBackgroundColor(0xFF5C6BC0);
         exp.setOnClickListener(v -> exportData());
         row.addView(exp, lpWrap());
 
@@ -538,15 +538,15 @@ public class SettingsActivity extends AppCompatActivity {
         b.setText(text);
         b.setMinimumWidth(dp(44));
         b.setTextSize(13);
-        b.setBackgroundColor(0xFFE5F1FB);
-        b.setTextColor(0xFF0078D7);
+        b.setBackgroundColor(0xFFEDF1F8);
+        b.setTextColor(0xFF5C6BC0);
         return b;
     }
 
     private TextView hint(String s) {
         TextView t = new TextView(this);
         t.setText(s);
-        t.setTextColor(0xFF666666);
+        t.setTextColor(0xFF8A94A6);
         t.setTextSize(13);
         t.setPadding(0, dp(6), 0, dp(6));
         return t;

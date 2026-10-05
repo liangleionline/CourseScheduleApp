@@ -20,6 +20,7 @@ import com.courseschedule.app.data.Course;
 import com.courseschedule.app.data.NonCourseItem;
 import com.courseschedule.app.data.ScheduleEntry;
 import com.courseschedule.app.data.TimetableEngine;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
@@ -32,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout root;
     private LinearLayout emptyView;
     private TextView titleView, emptyTitle, emptyHint;
-    private TextView createBtn;
+    private MaterialButton createBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         data.preseedNonCoursesIfEmpty();
 
         root = new FrameLayout(this);
-        root.setBackgroundColor(0xFFF2F2F2);
+        root.setBackgroundColor(0xFFF6F8FC);
         setContentView(root);
 
         LinearLayout content = new LinearLayout(this);
@@ -51,30 +52,28 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(content);
 
-        // 顶栏（Metro 风格：蓝色命令栏 + 大号轻量标题）
+        // 顶栏
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(16), dp(14), dp(12), dp(10));
-        top.setBackgroundColor(0xFF0078D7);
+        top.setBackgroundColor(0xFF5C6BC0);
         content.addView(top);
 
         TextView title = new TextView(this);
         titleView = title;
         title.setText("课程表");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(24);
-        title.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL)); // Segoe UI Light 风格
+        title.setTextSize(20);
+        title.setTypeface(null, Typeface.BOLD);
         title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         top.addView(title);
 
-        TextView settingsBtn = new TextView(this);
+        MaterialButton settingsBtn = new MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
         settingsBtn.setText("设置");
         settingsBtn.setTextColor(Color.WHITE);
-        settingsBtn.setTextSize(15);
-        settingsBtn.setGravity(Gravity.CENTER);
-        settingsBtn.setPadding(dp(16), dp(7), dp(16), dp(7));
-        settingsBtn.setBackground(metroFlat(0x22FFFFFF)); // 直角扁平按钮
+        settingsBtn.setStrokeColor(android.content.res.ColorStateList.valueOf(0x66FFFFFF));
+        settingsBtn.setBackgroundColor(0x22FFFFFF);
         settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settingsBtn);
 
@@ -114,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
         // 底部提示
         TextView footer = new TextView(this);
         footer.setText("点击课程查看详情 · 按住下拉查看非课程项 · 左右滑动切换课程表");
-        footer.setTextColor(0xFF666666);
+        footer.setTextColor(0xFF8A94A6);
         footer.setTextSize(12);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(6), 0, dp(8));
@@ -131,29 +130,26 @@ public class MainActivity extends AppCompatActivity {
         TextView emptyTitleTv = new TextView(this);
         emptyTitle = emptyTitleTv;
         emptyTitleTv.setText("还没有课程表");
-        emptyTitleTv.setTextColor(0xFF1A1A1A);
-        emptyTitleTv.setTextSize(20);
-        emptyTitleTv.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        emptyTitleTv.setTextColor(0xFF3A4151);
+        emptyTitleTv.setTextSize(18);
+        emptyTitleTv.setTypeface(null, Typeface.BOLD);
         emptyTitleTv.setGravity(Gravity.CENTER);
         emptyView.addView(emptyTitleTv, lpWrap());
 
         TextView emptyHintTv = new TextView(this);
         emptyHint = emptyHintTv;
         emptyHintTv.setText("点击下方按钮，开始创建你的专属课程表");
-        emptyHintTv.setTextColor(0xFF666666);
+        emptyHintTv.setTextColor(0xFF8A94A6);
         emptyHintTv.setTextSize(13);
         emptyHintTv.setGravity(Gravity.CENTER);
         emptyHintTv.setPadding(dp(24), dp(6), dp(24), dp(16));
         emptyView.addView(emptyHintTv, lpWrap());
 
-        TextView createBtnView = new TextView(this);
+        MaterialButton createBtnView = new MaterialButton(this);
         createBtn = createBtnView;
         createBtnView.setText("开始创建课程表");
         createBtnView.setTextColor(Color.WHITE);
-        createBtnView.setTextSize(16);
-        createBtnView.setGravity(Gravity.CENTER);
-        createBtnView.setPadding(dp(28), dp(12), dp(28), dp(12));
-        createBtnView.setBackground(metroFlat(0xFF0078D7)); // Metro：直角纯色命令按钮
+        createBtnView.setBackgroundColor(0xFF5C6BC0);
         createBtnView.setOnClickListener(v -> onEmptyAction());
         emptyView.addView(createBtnView, lpWrap());
 
@@ -239,6 +235,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         refresh();
+        // 打开 App 后主动刷新桌面小组件
+        try {
+            com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(this);
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
@@ -269,17 +270,17 @@ public class MainActivity extends AppCompatActivity {
         detailName = new TextView(this);
         detailName.setTextSize(17);
         detailName.setTypeface(null, Typeface.BOLD);
-        detailName.setTextColor(0xFF1A1A1A);
+        detailName.setTextColor(0xFF3A4151);
         detailName.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(detailName);
 
         TextView edit = new TextView(this);
         edit.setText("编辑");
         edit.setTextSize(14);
-        edit.setTextColor(0xFF0078D7);
+        edit.setTextColor(0xFF5C6BC0);
         edit.setGravity(Gravity.CENTER);
         edit.setPadding(dp(14), dp(6), dp(14), dp(6));
-        edit.setBackground(roundedBg(0xFFE5F1FB));
+        edit.setBackground(roundedBg(0xFFEDF1F8));
         edit.setOnClickListener(v -> {
             if (detailType == TimetableEngine.TYPE_COURSE) {
                 showCourseEditDialog(detailDay, detailRefId);
@@ -292,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
         TextView close = new TextView(this);
         close.setText("✕");
         close.setTextSize(16);
-        close.setTextColor(0xFF666666);
+        close.setTextColor(0xFF8A94A6);
         close.setGravity(Gravity.CENTER);
         close.setPadding(dp(10), dp(6), dp(4), dp(6));
         close.setOnClickListener(v -> hideDetail());
@@ -301,13 +302,13 @@ public class MainActivity extends AppCompatActivity {
 
         detailMeta = new TextView(this);
         detailMeta.setTextSize(13);
-        detailMeta.setTextColor(0xFF0078D7);
+        detailMeta.setTextColor(0xFF5C6BC0);
         detailMeta.setPadding(0, dp(4), 0, 0);
         detailPanel.addView(detailMeta, lpWrap());
 
         detailExtra = new TextView(this);
         detailExtra.setTextSize(13);
-        detailExtra.setTextColor(0xFF666666);
+        detailExtra.setTextColor(0xFF8A94A6);
         detailExtra.setPadding(0, dp(4), 0, 0);
         detailPanel.addView(detailExtra, lpWrap());
     }
@@ -440,20 +441,11 @@ public class MainActivity extends AppCompatActivity {
     private int dp(int v) {        return (int) (v * getResources().getDisplayMetrics().density);
     }
 
-    /** Metro 风格：直角纯色块背景（无圆角） */
-    private android.graphics.drawable.GradientDrawable metroFlat(int color) {
-        android.graphics.drawable.GradientDrawable g =
-                new android.graphics.drawable.GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(0);
-        return g;
-    }
-
     private android.graphics.drawable.GradientDrawable roundedBg(int color) {
         android.graphics.drawable.GradientDrawable g =
                 new android.graphics.drawable.GradientDrawable();
         g.setColor(color);
-        g.setCornerRadius(0); // Metro：直角扁平
+        g.setCornerRadius(dp(10));
         return g;
     }
 }

@@ -53,7 +53,7 @@ public class SetupActivity extends AppCompatActivity {
 
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF2F2F2);
+        root.setBackgroundColor(0xFFF6F8FC);
         setContentView(root);
         render();
     }
@@ -63,14 +63,14 @@ public class SetupActivity extends AppCompatActivity {
         root.setPadding(dp(16), dp(18), dp(16), dp(16));
         TextView stepTitle = new TextView(this);
         stepTitle.setText(stepTitle());
-        stepTitle.setTextColor(0xFF1A1A1A);
+        stepTitle.setTextColor(0xFF3A4151);
         stepTitle.setTextSize(20);
         stepTitle.setTypeface(null, Typeface.BOLD);
         root.addView(stepTitle);
 
         TextView stepSub = new TextView(this);
         stepSub.setText(stepSub());
-        stepSub.setTextColor(0xFF666666);
+        stepSub.setTextColor(0xFF8A94A6);
         stepSub.setTextSize(13);
         stepSub.setPadding(0, dp(4), 0, dp(8));
         root.addView(stepSub);
@@ -111,8 +111,8 @@ public class SetupActivity extends AppCompatActivity {
         if (step == 4) {
             MaterialButton prev = new MaterialButton(this);
             prev.setText("返回");
-            prev.setBackgroundColor(0xFFE5F1FB);
-            prev.setTextColor(0xFF0078D7);
+            prev.setBackgroundColor(0xFFEDF1F8);
+            prev.setTextColor(0xFF5C6BC0);
             prev.setOnClickListener(v -> { scheduleDay--; render(); });
             prev.setEnabled(scheduleDay > 1);
             bottom.addView(prev, lpMargins(0, 0, dp(8), 0));
@@ -127,7 +127,7 @@ public class SetupActivity extends AppCompatActivity {
             next.setText("下一步");
         }
         next.setTextColor(Color.WHITE);
-        next.setBackgroundColor(0xFF0078D7);
+        next.setBackgroundColor(0xFF5C6BC0);
         next.setOnClickListener(v -> onNext());
         bottom.addView(next, lpWrap());
     }
@@ -157,7 +157,7 @@ public class SetupActivity extends AppCompatActivity {
         MaterialButton add = new MaterialButton(this);
         add.setText("＋ 添加课程");
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> showCourseEditDialog(null));
         body.addView(add, lpMargins(0, 0, 0, dp(10)));
 
@@ -188,7 +188,7 @@ public class SetupActivity extends AppCompatActivity {
 
         TextView tv = new TextView(this);
         tv.setText(c.teacher == null || c.teacher.isEmpty() ? c.name : c.name + "\n" + c.teacher);
-        tv.setTextColor(0xFF1A1A1A);
+        tv.setTextColor(0xFF3A4151);
         tv.setTextSize(15);
         tv.setPadding(dp(10), 0, 0, 0);
         row.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -252,7 +252,7 @@ public class SetupActivity extends AppCompatActivity {
         et.setInputType(InputType.TYPE_CLASS_NUMBER);
         et.setText(String.valueOf(data.lessonDurationMin));
         et.setHint("每节课时长（分钟）");
-        et.setTextColor(0xFF1A1A1A);
+        et.setTextColor(0xFF3A4151);
         et.setTextSize(18);
         card.addView(et, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -268,7 +268,7 @@ public class SetupActivity extends AppCompatActivity {
     private void renderStep3() {
         TextView tip = new TextView(this);
         tip.setText("💡 提示：非课程项为贯穿全周项目，周一排布一次即可，周二至周五自动显示。");
-        tip.setTextColor(0xFF0078D7);
+        tip.setTextColor(0xFF5C6BC0);
         tip.setTextSize(13);
         tip.setPadding(0, 0, 0, dp(8));
         body.addView(tip);
@@ -276,7 +276,7 @@ public class SetupActivity extends AppCompatActivity {
         MaterialButton add = new MaterialButton(this);
         add.setText("＋ 添加非课程项");
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> showNonCourseEditDialog(null));
         body.addView(add, lpMargins(0, 0, 0, dp(10)));
 
@@ -306,7 +306,7 @@ public class SetupActivity extends AppCompatActivity {
 
         TextView tv = new TextView(this);
         tv.setText(n.name + "（" + n.durationMin + "分钟）");
-        tv.setTextColor(0xFF1A1A1A);
+        tv.setTextColor(0xFF3A4151);
         tv.setTextSize(15);
         tv.setPadding(dp(10), 0, 0, 0);
         row.addView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -378,7 +378,7 @@ public class SetupActivity extends AppCompatActivity {
             add.setText("＋ 添加课程");
         }
         add.setTextColor(Color.WHITE);
-        add.setBackgroundColor(0xFF0078D7);
+        add.setBackgroundColor(0xFF5C6BC0);
         add.setOnClickListener(v -> showAddItemDialog());
         actionBar.addView(add, lpWrap());
 
@@ -386,7 +386,7 @@ public class SetupActivity extends AppCompatActivity {
         if (scheduleDay > 1) {
             TextView auto = new TextView(this);
             auto.setText("自动贯穿全周：");
-            auto.setTextColor(0xFF666666);
+            auto.setTextColor(0xFF8A94A6);
             auto.setTextSize(13);
             body.addView(auto);
             StringBuilder sb = new StringBuilder();
@@ -399,7 +399,7 @@ public class SetupActivity extends AppCompatActivity {
             if (sb.length() == 0) sb.append("（无）");
             TextView autoList = new TextView(this);
             autoList.setText(sb.toString());
-            autoList.setTextColor(0xFF1A1A1A);
+            autoList.setTextColor(0xFF3A4151);
             autoList.setTextSize(14);
             autoList.setPadding(0, dp(2), 0, dp(10));
             body.addView(autoList);
@@ -561,8 +561,8 @@ public class SetupActivity extends AppCompatActivity {
         b.setText(text);
         b.setMinimumWidth(dp(48));
         b.setTextSize(13);
-        b.setBackgroundColor(0xFFE5F1FB);
-        b.setTextColor(0xFF0078D7);
+        b.setBackgroundColor(0xFFEDF1F8);
+        b.setTextColor(0xFF5C6BC0);
         return b;
     }
 
@@ -579,7 +579,7 @@ public class SetupActivity extends AppCompatActivity {
     private TextView hintText(String s) {
         TextView t = new TextView(this);
         t.setText(s);
-        t.setTextColor(0xFF666666);
+        t.setTextColor(0xFF8A94A6);
         t.setTextSize(13);
         t.setPadding(0, dp(8), 0, dp(4));
         return t;

@@ -6,7 +6,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
@@ -90,16 +89,16 @@ public class TimetableView extends View {
         timeAxisW = 44 * d;
         headerH = 44 * d;
 
-        linePaint.setColor(0xFFE0E0E0);
+        linePaint.setColor(0xFFE6EAF0);
         linePaint.setStrokeWidth(1f * d);
 
         namePaint.setTextSize(15 * d);
-        namePaint.setTypeface(Typeface.DEFAULT_BOLD); // Metro 磁贴风格：粗体
+        namePaint.setFakeBoldText(true);
         namePaint.setTextAlign(Paint.Align.CENTER);
         subPaint.setTextSize(11 * d);
         subPaint.setTextAlign(Paint.Align.CENTER);
         dayPaint.setTextSize(15 * d);
-        dayPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        dayPaint.setFakeBoldText(true);
         dayPaint.setTextAlign(Paint.Align.CENTER);
         timePaint.setTextSize(10 * d);
         timePaint.setTextAlign(Paint.Align.CENTER);
@@ -184,7 +183,7 @@ public class TimetableView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float w = getWidth(), h = getHeight();
-        canvas.drawColor(0xFFF2F2F2);
+        canvas.drawColor(0xFFF6F8FC);
 
         if (days.isEmpty()) return;
         colW = (w - timeAxisW - 2 * pad) / days.size();
@@ -218,7 +217,7 @@ public class TimetableView extends View {
         drawHeader(canvas, dayAreaX);
 
         if (n == 0) {
-            timePaint.setColor(0xFF666666);
+            timePaint.setColor(0xFF8A94A6);
             canvas.drawText("暂无课表", (dayAreaX + w - pad) / 2f, headerH + pad + dp(20), timePaint);
             return;
         }
@@ -230,7 +229,7 @@ public class TimetableView extends View {
             if (rh <= 0) continue; // 非课程收起时无高度
 
             canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
-            timePaint.setColor(0xFF666666);
+            timePaint.setColor(0xFF8A94A6);
             canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
             if (band) {
@@ -243,7 +242,8 @@ public class TimetableView extends View {
                 int bandAlpha = (int) (255 * Math.min(1f, fade));
                 rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rh - 1);
                 cellPaint.setColor(adjustAlpha(ColorUtil.NONCOURSE_BG, bandAlpha));
-                canvas.drawRect(rect, cellPaint); // Metro：直角扁平块
+                canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
+                        8 * getResources().getDisplayMetrics().density, cellPaint);
                 // 高度不足以容纳文字或已基本淡出时，不绘制文字，避免极小尺寸渲染闪烁
                 if (rh >= dp(14) && fade > 0.05f) {
                     drawCellText(canvas, rect, cellName(bandCell), "",
@@ -259,7 +259,8 @@ public class TimetableView extends View {
                     float x = dayAreaX + idx * colW;
                     rect.set(x + 2, y + 1, x + colW - 2, y + rh - 1);
                     cellPaint.setColor(c.bgColor);
-                    canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
+                    canvas.drawRoundRect(rect, 8 * getResources().getDisplayMetrics().density,
+                            8 * getResources().getDisplayMetrics().density, cellPaint);
                     drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
                 }
             }
@@ -274,9 +275,10 @@ public class TimetableView extends View {
             float x = dayAreaX + idx * colW;
             rect.set(x + 2, pad, x + colW - 2, pad + headerH);
             boolean today = isToday(day);
-            cellPaint.setColor(today ? 0xFF0078D7 : 0xFFE5F1FB);
-            canvas.drawRect(rect, cellPaint); // Metro：直角扁平标题块
-            dayPaint.setColor(today ? Color.WHITE : 0xFF1A1A1A);
+            cellPaint.setColor(today ? 0xFF5C6BC0 : 0xFFEDF1F8);
+            canvas.drawRoundRect(rect, 10 * getResources().getDisplayMetrics().density,
+                    10 * getResources().getDisplayMetrics().density, cellPaint);
+            dayPaint.setColor(today ? Color.WHITE : 0xFF3A4151);
             canvas.drawText(DAY_NAMES[day - 1], rect.centerX(), rect.centerY() + dayPaint.getTextSize() * 0.36f, dayPaint);
         }
     }

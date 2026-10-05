@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 小组件课程条目（100% 复刻开源项目 widget_item_course_common） -->
+<!-- 小组件课程条目：课程名与时间同一行，紧凑排列以适配 4×3 高度 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/item_root_card"
@@ -7,63 +7,41 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp"
+    android:paddingTop="5dp"
+    android:paddingBottom="5dp"
     android:paddingHorizontal="4dp">
 
     <ImageView
         android:id="@+id/course_indicator"
         android:layout_width="4dp"
-        android:layout_height="match_parent"
-        android:layout_marginTop="2dp"
-        android:layout_marginBottom="2dp"
+        android:layout_height="16dp"
+        android:layout_marginTop="1dp"
+        android:layout_marginBottom="1dp"
         android:src="@drawable/widget_indicator_shape" />
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/tv_course_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="6dp"
-        android:orientation="vertical">
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/widget_text_primary"
+        android:textSize="12dp"
+        android:textStyle="bold"
+        tools:text="语文" />
 
-        <TextView
-            android:id="@+id/tv_course_name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:textColor="@color/widget_text_primary"
-            android:textSize="12dp"
-            android:textStyle="bold"
-            tools:text="语文" />
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp">
-
-            <TextView
-                android:id="@+id/tv_course_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:includeFontPadding="false"
-                android:textColor="@color/widget_text_secondary"
-                android:textSize="10dp"
-                tools:text="08:00-08:40" />
-        </RelativeLayout>
-
-        <TextView
-            android:id="@+id/tv_course_teacher"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:ellipsize="end"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:textColor="@color/widget_text_hint"
-            android:textSize="9dp"
-            tools:text="张老师" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/tv_course_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="10dp"
+        tools:text="08:20-09:00" />
 </LinearLayout>

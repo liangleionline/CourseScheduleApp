@@ -220,15 +220,6 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         String timeText = fmt(cell.startMin) + "-" + fmt(cell.endMin);
         itemRv.setTextViewText(R.id.tv_course_time, timeText);
 
-        // 教师：为空则隐藏
-        String teacher = course != null && course.teacher != null ? course.teacher : "";
-        if (teacher.isBlank()) {
-            itemRv.setViewVisibility(R.id.tv_course_teacher, View.GONE);
-        } else {
-            itemRv.setTextViewText(R.id.tv_course_teacher, teacher);
-            itemRv.setViewVisibility(R.id.tv_course_teacher, View.VISIBLE);
-        }
-
         // 指示条颜色 = 课程配色
         int colorInt = course != null ? course.bgColor : 0xFFE91E63;
         setIndicatorTint(itemRv, R.id.course_indicator, colorInt);

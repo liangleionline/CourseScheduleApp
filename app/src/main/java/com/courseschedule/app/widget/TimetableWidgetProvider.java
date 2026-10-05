@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Build;
+import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -61,13 +62,17 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         WidgetWorkManagerHelper.cancelAllWork(context.getApplicationContext());
     }
 
-    /** 刷新所有已添加的小组件（数据变化 / App 打开时调用） */
+    /** 刷新所有已添加的小组件（数据变化 / App 打开时调用；含 4×3 与 4×4） */
     public static void refreshAll(Context context) {
         try {
             AppWidgetManager mgr = AppWidgetManager.getInstance(context);
             ComponentName cn = new ComponentName(context, TimetableWidgetProvider.class);
             int[] ids = mgr.getAppWidgetIds(cn);
             for (int id : ids) updateWidget(context, id);
+            // 4×4 小组件（子类组件）
+            ComponentName cn44 = new ComponentName(context, TimetableWidgetProvider4x4.class);
+            int[] ids44 = mgr.getAppWidgetIds(cn44);
+            for (int id : ids44) updateWidget(context, id);
         } catch (Exception ignored) {
         }
     }
@@ -134,19 +139,42 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         }
         List<RenderedCell> tomorrowCourses = coursesOf(data, tomorrowDow, widgetTid);
 
+        // 5.1 行高自适应：按小组件实际高度与当天最多课程数均分行高，课多课少都填满
+        int rowHeightPx = computeRowHeightPx(context, appWidgetId,
+                Math.max(remainingToday.size(), tomorrowCourses.size()));
+
         // 渲染左侧：今日课程
         renderColumn(context, rv, appWidgetId,
                 R.id.list_view_today, R.id.tv_today_date, R.id.tv_today_footer,
                 R.id.empty_today_container, R.id.empty_today,
-                cal, remainingToday, true, data);
+                cal, remainingToday, true, data, rowHeightPx);
 
         // 渲染右侧：明日课程
         renderColumn(context, rv, appWidgetId,
                 R.id.list_view_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer,
                 R.id.empty_tomorrow_container, R.id.empty_tomorrow,
-                tomorrow, tomorrowCourses, false, data);
+                tomorrow, tomorrowCourses, false, data, rowHeightPx);
 
         return rv;
+    }
+
+    /** 计算自适应行高（px）：可用高度均分给当天最多课程数，下限 22dp 保证可读 */
+    private static int computeRowHeightPx(Context context, int appWidgetId, int maxRows) {
+        int widgetHeightDp = 200; // 兜底默认（≈4×3）
+        try {
+            Bundle opts = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId);
+            if (opts != null) {
+                int h = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
+                if (h > 0) widgetHeightDp = h;
+            }
+        } catch (Exception ignored) {
+        }
+        // 固定占位：上下 padding 20dp + 标题 16dp + 双列间距 4dp + 日期头 16dp ≈ 56dp
+        int fixedDp = 56;
+        float density = context.getResources().getDisplayMetrics().density;
+        int availablePx = (int) ((widgetHeightDp - fixedDp) * density);
+        int minRowPx = (int) (22 * density);
+        return Math.max(minRowPx, availablePx / Math.max(maxRows, 1));
     }
 
     /** 重置小组件视图可见性状态（与开源项目一致） */
@@ -162,7 +190,7 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
                                      int listViewId, int titleId, int footerId,
                                      int emptyContainerId, int emptyTextId,
                                      Calendar date, List<RenderedCell> displayCourses,
-                                     boolean isToday, AppData data) {
+                                     boolean isToday, AppData data, int rowHeightPx) {
         // 1. 标题拼接（周几用周一=1索引，避免 Calendar.DAY_OF_WEEK 周日=1 错位）
         String prefix = isToday ? "今天" : "明天";
         String dayOfWeekStr = WEEK_DAYS[todayDow(date) - 1];
@@ -189,7 +217,7 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
                     new RemoteViewsCompat.RemoteCollectionItems.Builder();
 
             for (RenderedCell cell : displayCourses) {
-                RemoteViews itemRv = createCourseItemView(context, data, cell);
+                RemoteViews itemRv = createCourseItemView(context, data, cell, rowHeightPx);
                 itemRv.setOnClickFillInIntent(R.id.item_root_card, new Intent());
                 long itemId = (cell.refId + "_" + cell.startMin).hashCode() & 0x7FFFFFFFL;
                 builder.addItem(itemId, itemRv);
@@ -209,10 +237,15 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    /** 创建单条课程条目（与开源项目 CourseItemRenderer.createCourseItemView 一致） */
-    private static RemoteViews createCourseItemView(Context context, AppData data, RenderedCell cell) {
+    /** 创建单条课程条目（与开源项目 CourseItemRenderer.createCourseItemView 一致）；rowHeightPx<=0 时不强制行高 */
+    private static RemoteViews createCourseItemView(Context context, AppData data, RenderedCell cell, int rowHeightPx) {
         RemoteViews itemRv = new RemoteViews(context.getPackageName(), R.layout.widget_course_item);
         Course course = data.getCourse(cell.refId);
+
+        // 行高自适应：按可用高度均分，课多课少自动填满，不留底部空白
+        if (rowHeightPx > 0) {
+            itemRv.setInt(R.id.item_root_card, "setMinimumHeight", rowHeightPx);
+        }
 
         String name = course != null && course.name != null ? course.name : "课程";
         itemRv.setTextViewText(R.id.tv_course_name, name);

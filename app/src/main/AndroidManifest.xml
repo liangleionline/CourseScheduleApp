@@ -37,13 +37,26 @@
         <receiver
             android:name=".widget.TimetableWidgetProvider"
             android:exported="false"
-            android:label="课程表小组件">
+            android:label="课程表小组件（4×3）">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/timetable_widget_info" />
+        </receiver>
+
+        <!-- 4×4 小组件：同一渲染逻辑，不同组件名与尺寸配置，可容纳更多课程 -->
+        <receiver
+            android:name=".widget.TimetableWidgetProvider4x4"
+            android:exported="false"
+            android:label="课程表小组件（4×4）">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/timetable_widget_info_4x4" />
         </receiver>
     </application>
 

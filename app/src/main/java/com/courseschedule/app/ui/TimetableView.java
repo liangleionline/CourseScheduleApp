@@ -5,7 +5,9 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.SystemClock;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.util.AttributeSet;
@@ -31,6 +33,7 @@ import java.util.TreeMap;
  * - 非课程项默认隐藏（行高为 0），课程紧凑排列
  * - 按住向下滑动：非课程行从 0 生长到指定高度，松手回弹收回
  * - 轻点课程触发详情回调；滑动与点击用系统阈值区分
+ * - Win8 磁贴质感：每块色块覆盖一层均匀平面玻璃罩（无渐变无高光，完全平面）
  */
 public class TimetableView extends View {
 
@@ -60,6 +63,7 @@ public class TimetableView extends View {
 
     private final Paint cellPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint namePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint subPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint dayPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -72,6 +76,14 @@ public class TimetableView extends View {
     private float rowH, bandH;
     private float nonCourseReveal = 0f; // 0 隐藏，1 全展开
     private ValueAnimator animator;
+
+    /** 磁贴入场动画：每次数据刷新时课程色块从右下向左上对角错开落下（Windows 磁贴感） */
+    private static final long ENTRANCE_DUR = 650L;
+    private static final long ENTRANCE_STAGGER = 60L;
+    private static final long ENTRANCE_STAGGER_COL = 30L;
+    private static final float ENTRANCE_DROP_DP = 26f;
+    private long entranceStart = -1L;
+    private final OvershootInterpolator entranceInterp = new OvershootInterpolator(3f);
 
     private float downX, downY;
     private boolean moved;
@@ -133,6 +145,12 @@ public class TimetableView extends View {
         rows.addAll(rowMap.values());
         cancelAnim();
         nonCourseReveal = 0f;
+        invalidate();
+    }
+
+    /** 手动触发磁贴入场动画（如课程表切换滑入完成后调用） */
+    public void playEntrance() {
+        entranceStart = -1L;
         invalidate();
     }
 
@@ -224,12 +242,25 @@ public class TimetableView extends View {
         }
 
         float y = headerH + pad;
+        // 磁贴入场动画：首次绘制时启动，磁贴按右下→左上错开（对角波浪）
+        if (entranceStart < 0L) entranceStart = SystemClock.uptimeMillis();
+        long entranceNow = SystemClock.uptimeMillis();
+        boolean entranceRunning = entranceNow < entranceStart + ENTRANCE_DUR
+                + (long) rows.size() * ENTRANCE_STAGGER + (long) days.size() * ENTRANCE_STAGGER_COL;
+        int visibleCount = 0;
+        for (Row r2 : rows) {
+            if ((isBandRow(r2) ? bandH : rowH) > 0) visibleCount++;
+        }
+        int rowIdx = 0;
         for (Row row : rows) {
             boolean band = isBandRow(row);
             float rh = band ? bandH : rowH;
             if (rh <= 0) continue; // 非课程收起时无高度
 
-            canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+            // 分隔线：动画期间隐藏（磁贴错位落下时会露出横线），结束后再显示
+            if (!entranceRunning) {
+                canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+            }
             timePaint.setColor(0xFF666666);
             canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
@@ -238,14 +269,16 @@ public class TimetableView extends View {
                 for (RenderedCell cell : row.dayCells.values()) {
                     if (cell.type == TimetableEngine.TYPE_NONCOURSE) { bandCell = cell; break; }
                 }
+                // 横贯带：取列中间位置参与对角错开
+                float yDraw = y + cellDropOffset(rowIdx, (days.size() - 1) / 2, visibleCount, days.size());
                 // 随收起进度淡出，消除收起最后一瞬的文字闪烁
                 float fade = reveal;
                 int bandAlpha = (int) (255 * Math.min(1f, fade));
-                rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rh - 1);
+                rect.set(dayAreaX + 2, yDraw + 1, w - pad - 2, yDraw + rh - 1);
                 cellPaint.setColor(adjustAlpha(ColorUtil.NONCOURSE_BG, bandAlpha));
                 canvas.drawRect(rect, cellPaint); // Metro：直角扁平块
-                // 高度不足以容纳文字或已基本淡出时，不绘制文字，避免极小尺寸渲染闪烁
                 if (rh >= dp(14) && fade > 0.05f) {
+                    drawTileGlass(canvas, rect, bandAlpha); // 平面玻璃罩层
                     drawCellText(canvas, rect, cellName(bandCell), "",
                             adjustAlpha(ColorUtil.NONCOURSE_TEXT, (int) (255 * fade)), true);
                 }
@@ -257,15 +290,41 @@ public class TimetableView extends View {
                     Course c = courseById.get(cell.refId);
                     if (c == null) continue;
                     float x = dayAreaX + idx * colW;
-                    rect.set(x + 2, y + 1, x + colW - 2, y + rh - 1);
+                    float yDraw = y + cellDropOffset(rowIdx, idx, visibleCount, days.size());
+                    rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
+                    drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
                     drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
                 }
             }
+            rowIdx++;
             y += rh;
         }
-        canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+        if (!entranceRunning) canvas.drawLine(dayAreaX, y, w - pad, y, linePaint); // 底边线同动画期间隐藏
+        if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
+    }
+
+    /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉，Overshoot 回弹 */
+    private float cellDropOffset(int rowIdx, int colIdx, int totalRows, int totalCols) {
+        float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
+        long delay = (long) (totalRows - 1 - rowIdx) * ENTRANCE_STAGGER
+                + (long) (totalCols - 1 - colIdx) * ENTRANCE_STAGGER_COL;
+        long elapsed = SystemClock.uptimeMillis() - entranceStart - delay;
+        if (elapsed <= 0L) return -dropPx;
+        float p = Math.min(1f, elapsed / (float) ENTRANCE_DUR);
+        float t = entranceInterp.getInterpolation(p);
+        return (t - 1f) * dropPx;
+    }
+
+    /** 平面玻璃罩层：整块色块被一层均匀的极淡白玻璃覆盖，无渐变、无高光、无边缘线，保持完全平面 */
+    private void drawTileGlass(Canvas canvas, RectF r, int alpha) {
+        if (r.height() <= 0 || alpha <= 0) return;
+        int veil = (int) (0x10 * alpha / 255f); // 均匀白罩 ≈6%
+        glassPaint.setShader(null);
+        glassPaint.setColor(0xFFFFFFFF);
+        glassPaint.setAlpha(veil);
+        canvas.drawRect(r, glassPaint);
     }
 
     private void drawHeader(Canvas canvas, float dayAreaX) {
@@ -276,6 +335,7 @@ public class TimetableView extends View {
             boolean today = isToday(day);
             cellPaint.setColor(today ? 0xFF0078D7 : 0xFFE5F1FB);
             canvas.drawRect(rect, cellPaint); // Metro：直角扁平标题块
+            drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
             dayPaint.setColor(today ? Color.WHITE : 0xFF1A1A1A);
             canvas.drawText(DAY_NAMES[day - 1], rect.centerX(), rect.centerY() + dayPaint.getTextSize() * 0.36f, dayPaint);
         }

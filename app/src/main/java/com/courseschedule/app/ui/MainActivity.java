@@ -212,7 +212,9 @@ public class MainActivity extends AppCompatActivity {
         titleView.setText(data.activeTimetable().name);
         float w = root.getWidth();
         timetable.setTranslationX(direction > 0 ? -w : w);
-        timetable.animate().translationX(0).setDuration(240).start();
+        // 滑入到位后再播放磁贴入场动画，避免与平移重叠
+        timetable.animate().translationX(0).setDuration(240)
+                .withEndAction(() -> timetable.playEntrance()).start();
     }
 
     private void refresh() {
@@ -239,6 +241,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         refresh();
+        // 回到前台（后台切回/设置页返回）时重播磁贴入场动画
+        if (timetable.getVisibility() == View.VISIBLE) timetable.playEntrance();
         // 打开 App 后主动刷新桌面小组件
         try {
             com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(this);

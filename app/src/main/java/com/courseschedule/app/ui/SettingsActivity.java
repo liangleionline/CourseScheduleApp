@@ -34,6 +34,7 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         data = AppData.get(this);
+        data.ensureTimetable();
         data.preseedCoursesIfEmpty();
         data.preseedNonCoursesIfEmpty();
 
@@ -59,6 +60,9 @@ public class SettingsActivity extends AppCompatActivity {
         title.setTypeface(null, Typeface.BOLD);
         inner.addView(title);
 
+        sectionTitle(inner, "课程表管理");
+        timetableSection(inner);
+
         sectionTitle(inner, "课时设置");
         inner.addView(lessonCard());
 
@@ -74,6 +78,93 @@ public class SettingsActivity extends AppCompatActivity {
         sectionTitle(inner, "数据");
         inner.addView(clearCard());
         inner.addView(backupCard());
+    }
+
+    private void timetableSection(LinearLayout parent) {
+        LinearLayout c = card();
+        parent.addView(c);
+
+        TextView hint = new TextView(this);
+        hint.setText("多孩家庭可为每个孩子各建一个课程表，首页左右滑动切换，顶部显示当前课程表名称。");
+        hint.setTextColor(0xFF8A94A6);
+        hint.setTextSize(13);
+        c.addView(hint);
+
+        MaterialButton add = new MaterialButton(this);
+        add.setText("＋ 添加课程表");
+        add.setTextColor(Color.WHITE);
+        add.setBackgroundColor(0xFF5C6BC0);
+        add.setOnClickListener(v -> askTimetableName("添加课程表", "", name -> {
+            data.addTimetable(name);
+            render();
+        }));
+        c.addView(add, lpTop(6));
+
+        for (AppData.Timetable t : data.timetables) {
+            c.addView(timetableRow(t));
+        }
+    }
+
+    private View timetableRow(AppData.Timetable t) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(2), dp(6), dp(2), dp(6));
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView tv = new TextView(this);
+        boolean active = t.id.equals(data.activeTimetableId);
+        tv.setText((active ? "● " : "") + t.name);
+        tv.setTextColor(active ? 0xFF5C6BC0 : 0xFF3A4151);
+        tv.setTextSize(15);
+        tv.setTypeface(null, active ? Typeface.BOLD : Typeface.NORMAL);
+        tv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.addView(tv);
+
+        MaterialButton rename = smallBtn("改名");
+        rename.setOnClickListener(v -> askTimetableName("修改课程表名称", t.name, name -> {
+            data.renameTimetable(t.id, name);
+            render();
+        }));
+        row.addView(rename, lpWrap());
+
+        MaterialButton del = smallBtn("删");
+        del.setTextColor(0xFFEF5350);
+        del.setOnClickListener(v -> {
+            if (data.timetables.size() <= 1) { toast("至少保留一个课程表"); return; }
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("删除「" + t.name + "」？")
+                    .setMessage("将删除该课程表的全部排布数据，课程库与非课程项保留。")
+                    .setPositiveButton("删除", (d, w) -> {
+                        data.deleteTimetable(t.id);
+                        render();
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        });
+        row.addView(del, lpWrap());
+        return row;
+    }
+
+    private void askTimetableName(String title, String def, java.util.function.Consumer<String> onOk) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(20), dp(6), dp(20), 0);
+        EditText et = new EditText(this);
+        et.setHint("例如：张三的课程表");
+        et.setSingleLine(true);
+        et.setText(def);
+        wrap.addView(et, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setView(wrap)
+                .setPositiveButton("确定", (d, w) -> {
+                    String name = et.getText().toString().trim();
+                    if (name.isEmpty()) name = "我的课程表";
+                    onOk.accept(name);
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void sectionTitle(LinearLayout parent, String s) {
@@ -321,7 +412,7 @@ public class SettingsActivity extends AppCompatActivity {
     private View clearCard() {
         LinearLayout c = card();
         TextView hint = new TextView(this);
-        hint.setText("清空课表排布数据（保留课程库、非课程项库与全局设置），清空后可重新排布。");
+        hint.setText("清空当前课程表的排布数据（保留课程库、非课程项库与全局设置），清空后可重新排布。");
         hint.setTextColor(0xFF8A94A6);
         hint.setTextSize(13);
         c.addView(hint);

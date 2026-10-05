@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -31,6 +32,8 @@ public class MainActivity extends AppCompatActivity {
     private TimetableView timetable;
     private FrameLayout root;
     private LinearLayout emptyView;
+    private TextView titleView, emptyTitle, emptyHint;
+    private MaterialButton createBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(top);
 
         TextView title = new TextView(this);
+        titleView = title;
         title.setText("课程表");
         title.setTextColor(Color.WHITE);
         title.setTextSize(20);
@@ -85,6 +89,11 @@ public class MainActivity extends AppCompatActivity {
             public void onPeekStart() {
                 hideDetail();
             }
+
+            @Override
+            public void onSwipe(int direction) {
+                switchTimetable(direction);
+            }
         });
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
@@ -103,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
 
         // 底部提示
         TextView footer = new TextView(this);
-        footer.setText("点击课程查看详情 · 按住下拉可查看贯穿全周的非课程项");
+        footer.setText("点击课程查看详情 · 按住下拉查看非课程项 · 左右滑动切换课程表");
         footer.setTextColor(0xFF8A94A6);
         footer.setTextSize(12);
         footer.setGravity(Gravity.CENTER);
@@ -118,28 +127,31 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(emptyView);
 
-        TextView emptyTitle = new TextView(this);
-        emptyTitle.setText("还没有课程表");
-        emptyTitle.setTextColor(0xFF3A4151);
-        emptyTitle.setTextSize(18);
-        emptyTitle.setTypeface(null, Typeface.BOLD);
-        emptyTitle.setGravity(Gravity.CENTER);
-        emptyView.addView(emptyTitle, lpWrap());
+        TextView emptyTitleTv = new TextView(this);
+        emptyTitle = emptyTitleTv;
+        emptyTitleTv.setText("还没有课程表");
+        emptyTitleTv.setTextColor(0xFF3A4151);
+        emptyTitleTv.setTextSize(18);
+        emptyTitleTv.setTypeface(null, Typeface.BOLD);
+        emptyTitleTv.setGravity(Gravity.CENTER);
+        emptyView.addView(emptyTitleTv, lpWrap());
 
-        TextView emptyHint = new TextView(this);
-        emptyHint.setText("点击下方按钮，开始创建你的专属课程表");
-        emptyHint.setTextColor(0xFF8A94A6);
-        emptyHint.setTextSize(13);
-        emptyHint.setGravity(Gravity.CENTER);
-        emptyHint.setPadding(dp(24), dp(6), dp(24), dp(16));
-        emptyView.addView(emptyHint, lpWrap());
+        TextView emptyHintTv = new TextView(this);
+        emptyHint = emptyHintTv;
+        emptyHintTv.setText("点击下方按钮，开始创建你的专属课程表");
+        emptyHintTv.setTextColor(0xFF8A94A6);
+        emptyHintTv.setTextSize(13);
+        emptyHintTv.setGravity(Gravity.CENTER);
+        emptyHintTv.setPadding(dp(24), dp(6), dp(24), dp(16));
+        emptyView.addView(emptyHintTv, lpWrap());
 
-        MaterialButton createBtn = new MaterialButton(this);
-        createBtn.setText("开始创建课程表");
-        createBtn.setTextColor(Color.WHITE);
-        createBtn.setBackgroundColor(0xFF5C6BC0);
-        createBtn.setOnClickListener(v -> openSetup());
-        emptyView.addView(createBtn, lpWrap());
+        MaterialButton createBtnView = new MaterialButton(this);
+        createBtn = createBtnView;
+        createBtnView.setText("开始创建课程表");
+        createBtnView.setTextColor(Color.WHITE);
+        createBtnView.setBackgroundColor(0xFF5C6BC0);
+        createBtnView.setOnClickListener(v -> onEmptyAction());
+        emptyView.addView(createBtnView, lpWrap());
 
         refresh();
     }
@@ -152,12 +164,70 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(new Intent(this, SetupActivity.class), 100);
     }
 
+    private void onEmptyAction() {
+        if (data.timetables.isEmpty()) {
+            askTimetableName("创建课程表", "", name -> {
+                AppData.Timetable t = data.addTimetable(name);
+                data.setActiveTimetable(t.id);
+                openSetup();
+            });
+        } else {
+            openSetup();
+        }
+    }
+
+    private void askTimetableName(String title, String def, java.util.function.Consumer<String> onOk) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(20), dp(6), dp(20), 0);
+        EditText et = new EditText(this);
+        et.setHint("例如：张三的课程表");
+        et.setSingleLine(true);
+        et.setText(def);
+        wrap.addView(et, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setView(wrap)
+                .setPositiveButton("确定", (d, w) -> {
+                    String name = et.getText().toString().trim();
+                    if (name.isEmpty()) name = "我的课程表";
+                    onOk.accept(name);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void switchTimetable(int direction) {
+        int idx = data.timetableIndex(data.activeTimetableId);
+        if (idx < 0) return;
+        int ni = idx + direction;
+        if (ni < 0 || ni >= data.timetables.size()) return;
+        data.setActiveTimetable(data.timetables.get(ni).id);
+        hideDetail();
+        timetable.setData(data);
+        titleView.setText(data.activeTimetable().name);
+        float w = root.getWidth();
+        timetable.setTranslationX(direction > 0 ? -w : w);
+        timetable.animate().translationX(0).setDuration(240).start();
+    }
+
     private void refresh() {
         data = AppData.get(this);
-        boolean has = data.hasSchedule();
+        boolean any = !data.timetables.isEmpty();
+        if (any) data.ensureTimetable();
+        AppData.Timetable active = data.activeTimetable();
+        titleView.setText(any && active != null ? active.name : "课程表");
+        boolean has = any && data.hasSchedule();
         timetable.setData(data);
         timetable.setVisibility(has ? View.VISIBLE : View.GONE);
         emptyView.setVisibility(has ? View.GONE : View.VISIBLE);
+        if (!has) {
+            emptyTitle.setText(any && active != null ? "「" + active.name + "」还没有排课" : "还没有课程表");
+            emptyHint.setText(any
+                    ? "点击下方按钮，为该课程表开始排课\n多孩家庭可在设置中为每个孩子各建一个课程表"
+                    : "点击下方按钮，创建第一个课程表\n多孩家庭可为每个孩子各建一个课程表，左右滑动切换");
+            createBtn.setText(any ? "开始排课" : "创建课程表");
+        }
         hideDetail();
     }
 

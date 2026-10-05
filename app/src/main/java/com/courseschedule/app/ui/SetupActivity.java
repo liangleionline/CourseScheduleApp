@@ -47,6 +47,7 @@ public class SetupActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         data = AppData.get(this);
+        data.ensureTimetable();
         data.preseedCoursesIfEmpty();
         data.preseedNonCoursesIfEmpty();
 

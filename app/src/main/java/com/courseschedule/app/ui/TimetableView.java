@@ -37,6 +37,8 @@ public class TimetableView extends View {
         void onCellClick(int day, int type, String refId, int startMin, int endMin);
         /** 下拉展开非课程项开始时回调（用于隐藏详情面板等） */
         void onPeekStart();
+        /** 左右滑动切换课程表：direction=-1 上一个，+1 下一个 */
+        void onSwipe(int direction);
     }
 
     private static final String[] DAY_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
@@ -368,6 +370,14 @@ public class TimetableView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 if (moved) {
+                    // 横向滑动切换课程表
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    float w = getWidth();
+                    float hThresh = Math.max(dp(60), w * 0.2f);
+                    if (listener != null && Math.abs(dx) > hThresh && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                        listener.onSwipe(dx > 0 ? -1 : 1);
+                    }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);
                 } else if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {

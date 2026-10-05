@@ -22,8 +22,19 @@ public class AppData {
 
     private static AppData instance;
 
+    /** 一个课程表：名称 + 各自的每日排布 */
+    public static class Timetable {
+        public String id;
+        public String name;
+        public List<ScheduleEntry> entries = new ArrayList<>();
+        Timetable(String id, String name) { this.id = id; this.name = name; }
+    }
+
     public List<Course> courses = new ArrayList<>();
     public List<NonCourseItem> nonCourses = new ArrayList<>();
+    public List<Timetable> timetables = new ArrayList<>();
+    public String activeTimetableId = null;
+    /** 当前激活课程表的排布（指向 timetables 中激活项的 entries，随切换更新） */
     public List<ScheduleEntry> entries = new ArrayList<>();
     public int lessonDurationMin = DEFAULT_LESSON;
     public int firstStartMin = DEFAULT_FIRST_START;
@@ -35,11 +46,74 @@ public class AppData {
     private AppData(Context ctx) {
         prefs = ctx.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         load();
+        syncEntriesRef();
     }
 
     public static AppData get(Context ctx) {
         if (instance == null) instance = new AppData(ctx);
         return instance;
+    }
+
+    public Timetable activeTimetable() {
+        for (Timetable t : timetables) if (t.id.equals(activeTimetableId)) return t;
+        return timetables.isEmpty() ? null : timetables.get(0);
+    }
+
+    /** 确保至少存在一个课程表 */
+    public void ensureTimetable() {
+        if (!timetables.isEmpty()) return;
+        Timetable t = new Timetable(UUID.randomUUID().toString(), "我的课程表");
+        timetables.add(t);
+        activeTimetableId = t.id;
+        syncEntriesRef();
+        persist();
+    }
+
+    /** 切换当前激活课程表 */
+    public void setActiveTimetable(String id) {
+        for (Timetable t : timetables) {
+            if (t.id.equals(id)) {
+                activeTimetableId = id;
+                syncEntriesRef();
+                persist();
+                return;
+            }
+        }
+    }
+
+    public Timetable addTimetable(String name) {
+        Timetable t = new Timetable(UUID.randomUUID().toString(), name);
+        timetables.add(t);
+        persist();
+        return t;
+    }
+
+    public void renameTimetable(String id, String name) {
+        for (Timetable t : timetables) {
+            if (t.id.equals(id)) { t.name = name; persist(); return; }
+        }
+    }
+
+    public void deleteTimetable(String id) {
+        if (timetables.size() <= 1) return; // 至少保留一个
+        timetables.removeIf(t -> t.id.equals(id));
+        if (id.equals(activeTimetableId)) {
+            activeTimetableId = timetables.get(0).id;
+        }
+        syncEntriesRef();
+        persist();
+    }
+
+    public int timetableIndex(String id) {
+        for (int i = 0; i < timetables.size(); i++) {
+            if (timetables.get(i).id.equals(id)) return i;
+        }
+        return -1;
+    }
+
+    private void syncEntriesRef() {
+        Timetable t = activeTimetable();
+        entries = t == null ? new ArrayList<>() : t.entries;
     }
 
     /** 是否已有课表排布数据 */
@@ -102,17 +176,17 @@ public class AppData {
 
     public void deleteCourse(String id) {
         courses.removeIf(c -> c.id.equals(id));
-        entries.removeIf(e -> e.type == 0 && e.refId.equals(id));
+        for (Timetable t : timetables) t.entries.removeIf(e -> e.type == 0 && e.refId.equals(id));
         persist();
     }
 
     public void deleteNonCourse(String id) {
         nonCourses.removeIf(n -> n.id.equals(id));
-        entries.removeIf(e -> e.type == 1 && e.refId.equals(id));
+        for (Timetable t : timetables) t.entries.removeIf(e -> e.type == 1 && e.refId.equals(id));
         persist();
     }
 
-    /** 清空课表排布（保留课程库、非课程库、全局设置） */
+    /** 清空当前激活课表的排布（保留课程库、非课程库、全局设置） */
     public void clearSchedule() {
         entries.clear();
         persist();
@@ -156,12 +230,31 @@ public class AppData {
                 JSONObject o = ns.getJSONObject(i);
                 nonCourses.add(new NonCourseItem(o.getString("id"), o.optString("name"), o.optInt("dur")));
             }
-            entries.clear();
-            JSONArray es = root.optJSONArray("entries");
-            if (es != null) for (int i = 0; i < es.length(); i++) {
-                JSONObject o = es.getJSONObject(i);
-                entries.add(new ScheduleEntry(o.getInt("d"), o.getInt("t"), o.getString("r")));
+
+            timetables.clear();
+            JSONArray ts = root.optJSONArray("timetables");
+            if (ts != null && ts.length() > 0) {
+                for (int i = 0; i < ts.length(); i++) {
+                    JSONObject o = ts.getJSONObject(i);
+                    Timetable t = new Timetable(o.optString("id"), o.optString("name", "我的课程表"));
+                    JSONArray es = o.optJSONArray("entries");
+                    if (es != null) for (int j = 0; j < es.length(); j++) {
+                        JSONObject eo = es.getJSONObject(j);
+                        t.entries.add(new ScheduleEntry(eo.getInt("d"), eo.getInt("t"), eo.getString("r")));
+                    }
+                    timetables.add(t);
+                }
+            } else {
+                JSONArray es = root.optJSONArray("entries");
+                Timetable t = new Timetable(UUID.randomUUID().toString(), "我的课程表");
+                if (es != null) for (int i = 0; i < es.length(); i++) {
+                    JSONObject o = es.getJSONObject(i);
+                    t.entries.add(new ScheduleEntry(o.getInt("d"), o.getInt("t"), o.getString("r")));
+                }
+                timetables.add(t);
             }
+            activeTimetableId = root.optString("active", timetables.get(0).id);
+            syncEntriesRef();
             persist();
             return true;
         } catch (Exception e) {
@@ -193,13 +286,22 @@ public class AppData {
         }
         root.put("non", ns);
 
-        JSONArray es = new JSONArray();
-        for (ScheduleEntry e : entries) {
+        JSONArray ts = new JSONArray();
+        for (Timetable t : timetables) {
             JSONObject o = new JSONObject();
-            o.put("d", e.day); o.put("t", e.type); o.put("r", e.refId);
-            es.put(o);
+            o.put("id", t.id);
+            o.put("name", t.name);
+            JSONArray es = new JSONArray();
+            for (ScheduleEntry e : t.entries) {
+                JSONObject eo = new JSONObject();
+                eo.put("d", e.day); eo.put("t", e.type); eo.put("r", e.refId);
+                es.put(eo);
+            }
+            o.put("entries", es);
+            ts.put(o);
         }
-        root.put("entries", es);
+        root.put("timetables", ts);
+        if (activeTimetableId != null) root.put("active", activeTimetableId);
         return root;
     }
 
@@ -226,12 +328,36 @@ public class AppData {
                     JSONObject o = ns.getJSONObject(i);
                     nonCourses.add(new NonCourseItem(o.getString("id"), o.optString("name"), o.optInt("dur")));
                 }
-                entries.clear();
-                JSONArray es = root.optJSONArray("entries");
-                if (es != null) for (int i = 0; i < es.length(); i++) {
-                    JSONObject o = es.getJSONObject(i);
-                    entries.add(new ScheduleEntry(o.getInt("d"), o.getInt("t"), o.getString("r")));
+
+                timetables.clear();
+                JSONArray ts = root.optJSONArray("timetables");
+                if (ts != null && ts.length() > 0) {
+                    // 新结构：多课程表
+                    for (int i = 0; i < ts.length(); i++) {
+                        JSONObject o = ts.getJSONObject(i);
+                        Timetable t = new Timetable(o.optString("id"), o.optString("name", "我的课程表"));
+                        JSONArray es = o.optJSONArray("entries");
+                        if (es != null) for (int j = 0; j < es.length(); j++) {
+                            JSONObject eo = es.getJSONObject(j);
+                            t.entries.add(new ScheduleEntry(eo.getInt("d"), eo.getInt("t"), eo.getString("r")));
+                        }
+                        timetables.add(t);
+                    }
+                    activeTimetableId = root.optString("active", timetables.get(0).id);
+                } else {
+                    // 旧结构：单课程表，迁移为一个「我的课程表」
+                    List<ScheduleEntry> legacy = new ArrayList<>();
+                    JSONArray es = root.optJSONArray("entries");
+                    if (es != null) for (int i = 0; i < es.length(); i++) {
+                        JSONObject o = es.getJSONObject(i);
+                        legacy.add(new ScheduleEntry(o.getInt("d"), o.getInt("t"), o.getString("r")));
+                    }
+                    Timetable t = new Timetable(UUID.randomUUID().toString(), "我的课程表");
+                    t.entries.addAll(legacy);
+                    timetables.add(t);
+                    activeTimetableId = t.id;
                 }
+                syncEntriesRef();
             }
         } catch (Exception ignored) {
         }

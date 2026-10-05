@@ -46,6 +46,31 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         new Thread(() -> {
             for (int id : appWidgetIds) updateWidget(ctx, id);
         }).start();
+
+        // 添加后延迟重渲染：桌面刚放置时 getAppWidgetOptions 还未提供真实高度，
+        // 等布局完成后再刷一次，让行高按真实尺寸自适应（否则会紧凑+底部留白）
+        for (int id : appWidgetIds) {
+            scheduleDelayedRefresh(ctx, id, 2000L);
+        }
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager,
+                                          int appWidgetId, android.os.Bundle newOptions) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions);
+        // 尺寸确定/变化（含放置后首次布局）时，按新高度重新渲染
+        final Context ctx = context.getApplicationContext();
+        new Thread(() -> updateWidget(ctx, appWidgetId)).start();
+    }
+
+    private static void scheduleDelayedRefresh(Context ctx, int appWidgetId, long delayMs) {
+        android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        h.postDelayed(() -> {
+            try {
+                updateWidget(ctx, appWidgetId);
+            } catch (Exception ignored) {
+            }
+        }, delayMs);
     }
 
     @Override

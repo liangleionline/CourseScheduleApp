@@ -4,8 +4,10 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.util.AttributeSet;
@@ -31,6 +33,7 @@ import java.util.TreeMap;
  * - 非课程项默认隐藏（行高为 0），课程紧凑排列
  * - 按住向下滑动：非课程行从 0 生长到指定高度，松手回弹收回
  * - 轻点课程触发详情回调；滑动与点击用系统阈值区分
+ * - Metro Acrylic：整张网格上覆盖一层干净的玻璃板，色块被压于其下
  */
 public class TimetableView extends View {
 
@@ -60,6 +63,8 @@ public class TimetableView extends View {
 
     private final Paint cellPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glassEdgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint namePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint subPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint dayPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -266,6 +271,31 @@ public class TimetableView extends View {
             y += rh;
         }
         canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+
+        // 玻璃板：整张课表上覆盖一层干净的玻璃，色块被压于其下（Metro Acrylic 质感）
+        if (n > 0) drawGlassSheet(canvas, dayAreaX, pad, w - pad, y);
+    }
+
+    /** Metro Acrylic：覆盖整张课表的干净玻璃板——极淡受光渐变 + 顶缘高光 + 底缘微光，直角扁平、无阴影 */
+    private void drawGlassSheet(Canvas canvas, float left, float top, float right, float bottom) {
+        if (bottom - top <= 0 || right - left <= 0) return;
+        float d = getResources().getDisplayMetrics().density;
+        // 1. 玻璃板本体：顶部稍亮的白色受光面，向下趋匀，色块颜色透过玻璃保持鲜活
+        rect.set(left, top, right, bottom);
+        glassPaint.setShader(new LinearGradient(0, top, 0, bottom,
+                new int[]{0x26FFFFFF, 0x14FFFFFF, 0x0AFFFFFF, 0x0AFFFFFF},
+                new float[]{0f, 0.05f, 0.28f, 1f},
+                Shader.TileMode.CLAMP));
+        canvas.drawRect(rect, glassPaint);
+        glassPaint.setShader(null);
+        // 2. 玻璃顶缘高光（受光边）
+        glassEdgePaint.setColor(0x4DFFFFFF);
+        glassEdgePaint.setStrokeWidth(1.5f * d);
+        canvas.drawLine(left, top, right, top, glassEdgePaint);
+        // 3. 玻璃底缘微光（反光边）
+        glassEdgePaint.setColor(0x22FFFFFF);
+        glassEdgePaint.setStrokeWidth(1f * d);
+        canvas.drawLine(left, bottom, right, bottom, glassEdgePaint);
     }
 
     private void drawHeader(Canvas canvas, float dayAreaX) {

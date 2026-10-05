@@ -398,7 +398,7 @@ public class TimetableView extends View {
         }
     }
 
-    /** 翻转背面排版：课程名（可两行）+ 老师一行 + 时间一行 + 底部"长按编辑" */
+    /** 翻转背面排版：课程名（可两行）+ 老师一行 + 时间一行 */
     private void drawFlipBack(Canvas canvas, RectF r, String name, String teacher, String time, int color) {
         float availH = r.height() * 0.62f;
         String[] nameLines = name.length() >= 4
@@ -423,9 +423,6 @@ public class TimetableView extends View {
             infoY += subBaseSize * 1.2f;
         }
         canvas.drawText(time, r.centerX(), infoY, subPaint);
-        subPaint.setTextSize(subBaseSize * 0.78f);
-        subPaint.setColor(adjustAlpha(color, 175));
-        canvas.drawText("长按编辑", r.centerX(), r.bottom - subBaseSize * 0.9f, subPaint);
         namePaint.setTextSize(nameBaseSize);
         subPaint.setTextSize(subBaseSize);
     }

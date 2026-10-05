@@ -77,9 +77,10 @@ public class TimetableView extends View {
     private float nonCourseReveal = 0f; // 0 隐藏，1 全展开
     private ValueAnimator animator;
 
-    /** 磁贴入场动画：每次数据刷新时课程色块依次从上方弹性落下（Windows 磁贴感） */
+    /** 磁贴入场动画：每次数据刷新时课程色块从右下向左上对角错开落下（Windows 磁贴感） */
     private static final long ENTRANCE_DUR = 650L;
     private static final long ENTRANCE_STAGGER = 60L;
+    private static final long ENTRANCE_STAGGER_COL = 30L;
     private static final float ENTRANCE_DROP_DP = 26f;
     private long entranceStart = -1L;
     private final OvershootInterpolator entranceInterp = new OvershootInterpolator(3f);
@@ -236,26 +237,33 @@ public class TimetableView extends View {
         }
 
         float y = headerH + pad;
-        // 磁贴入场动画：首次绘制时启动，行按下落进度偏移
+        // 磁贴入场动画：首次绘制时启动，磁贴按右下→左上错开（对角波浪）
         if (entranceStart < 0L) entranceStart = SystemClock.uptimeMillis();
         long entranceNow = SystemClock.uptimeMillis();
-        boolean entranceRunning = entranceNow < entranceStart + ENTRANCE_DUR + (long) rows.size() * ENTRANCE_STAGGER;
+        boolean entranceRunning = entranceNow < entranceStart + ENTRANCE_DUR
+                + (long) rows.size() * ENTRANCE_STAGGER + (long) days.size() * ENTRANCE_STAGGER_COL;
+        int visibleCount = 0;
+        for (Row r2 : rows) {
+            if ((isBandRow(r2) ? bandH : rowH) > 0) visibleCount++;
+        }
         int rowIdx = 0;
         for (Row row : rows) {
             boolean band = isBandRow(row);
             float rh = band ? bandH : rowH;
             if (rh <= 0) continue; // 非课程收起时无高度
 
-            float yDraw = y + rowDropOffset(rowIdx);
-            canvas.drawLine(dayAreaX, yDraw, w - pad, yDraw, linePaint);
+            // 分隔线与时间轴保持布局位置，磁贴各自从上方掉下覆盖
+            canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
             timePaint.setColor(0xFF666666);
-            canvas.drawText(fmt(row.start), timeAxisW / 2f, yDraw + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
+            canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
             if (band) {
                 RenderedCell bandCell = null;
                 for (RenderedCell cell : row.dayCells.values()) {
                     if (cell.type == TimetableEngine.TYPE_NONCOURSE) { bandCell = cell; break; }
                 }
+                // 横贯带：取列中间位置参与对角错开
+                float yDraw = y + cellDropOffset(rowIdx, (days.size() - 1) / 2, visibleCount, days.size());
                 // 随收起进度淡出，消除收起最后一瞬的文字闪烁
                 float fade = reveal;
                 int bandAlpha = (int) (255 * Math.min(1f, fade));
@@ -275,6 +283,7 @@ public class TimetableView extends View {
                     Course c = courseById.get(cell.refId);
                     if (c == null) continue;
                     float x = dayAreaX + idx * colW;
+                    float yDraw = y + cellDropOffset(rowIdx, idx, visibleCount, days.size());
                     rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
@@ -289,10 +298,12 @@ public class TimetableView extends View {
         if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
     }
 
-    /** 磁贴入场偏移：行按错开延迟从上方掉下，Overshoot 过冲回弹形成 Windows 磁贴抖动感 */
-    private float rowDropOffset(int rowIdx) {
+    /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉，Overshoot 回弹 */
+    private float cellDropOffset(int rowIdx, int colIdx, int totalRows, int totalCols) {
         float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
-        long elapsed = SystemClock.uptimeMillis() - entranceStart - rowIdx * ENTRANCE_STAGGER;
+        long delay = (long) (totalRows - 1 - rowIdx) * ENTRANCE_STAGGER
+                + (long) (totalCols - 1 - colIdx) * ENTRANCE_STAGGER_COL;
+        long elapsed = SystemClock.uptimeMillis() - entranceStart - delay;
         if (elapsed <= 0L) return -dropPx;
         float p = Math.min(1f, elapsed / (float) ENTRANCE_DUR);
         float t = entranceInterp.getInterpolation(p);

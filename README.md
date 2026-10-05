@@ -32,3 +32,9 @@ app/src/main/java/com/courseschedule/app/
   data/       # 数据模型、存储、时间推算引擎、配色
   ui/         # 首页、引导流程、设置页、课表视图
 ```
+
+## 开源声明
+
+- 本应用中的**桌面小组件**实现复刻自开源项目 [ShiGuangSchedule/shiguangschedule](https://github.com/ShiGuangSchedule/shiguangschedule)（Apache License 2.0，Copyright (C) 2025 XingHeYuZhuan）。
+- 详细引用范围与修改说明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)，许可证全文见 [LICENSES/APACHE-2.0.txt](./LICENSES/APACHE-2.0.txt)。
+

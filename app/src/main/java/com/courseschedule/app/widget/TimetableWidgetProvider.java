@@ -118,7 +118,6 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         tomorrow.add(Calendar.DAY_OF_YEAR, 1);
         int todayDow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1; // 周一=1
         int tomorrowDow = todayDow % 7 + 1;
-        int currentWeek = weekOfSchoolYear(cal);
 
         // 今日：仅剩余课程（结束时间晚于当前时刻）
         int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
@@ -132,13 +131,13 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         renderColumn(context, rv, appWidgetId,
                 R.id.list_view_today, R.id.tv_today_date, R.id.tv_today_footer,
                 R.id.empty_today_container, R.id.empty_today,
-                cal, remainingToday, currentWeek, true, data);
+                cal, remainingToday, true, data);
 
         // 渲染右侧：明日课程
         renderColumn(context, rv, appWidgetId,
                 R.id.list_view_tomorrow, R.id.tv_tomorrow_date, R.id.tv_tomorrow_footer,
                 R.id.empty_tomorrow_container, R.id.empty_tomorrow,
-                tomorrow, tomorrowCourses, currentWeek, false, data);
+                tomorrow, tomorrowCourses, false, data);
 
         return rv;
     }
@@ -156,13 +155,11 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
                                      int listViewId, int titleId, int footerId,
                                      int emptyContainerId, int emptyTextId,
                                      Calendar date, List<RenderedCell> displayCourses,
-                                     int currentWeek, boolean isToday, AppData data) {
+                                     boolean isToday, AppData data) {
         // 1. 标题拼接（周几用周一=1索引，避免 Calendar.DAY_OF_WEEK 周日=1 错位）
         String prefix = isToday ? "今天" : "明天";
         String dayOfWeekStr = WEEK_DAYS[todayDow(date) - 1];
-        int displayWeek = currentWeek;
-        if (!isToday && todayDow(date) == 1) displayWeek = currentWeek + 1;
-        String titleText = prefix + " " + fmtDate(date) + " " + dayOfWeekStr + " 第" + displayWeek + "周";
+        String titleText = prefix + " " + fmtDate(date) + " " + dayOfWeekStr;
         rv.setTextViewText(titleId, titleText);
 
         // 2. 空视图与列表渲染切换
@@ -263,20 +260,6 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
             if (!coursesOf(data, d).isEmpty()) return true;
         }
         return false;
-    }
-
-    /** 学年周数：以当年9月1日为第1周起点 */
-    private static int weekOfSchoolYear(Calendar cal) {
-        Calendar start = Calendar.getInstance();
-        start.set(Calendar.MONTH, Calendar.SEPTEMBER);
-        start.set(Calendar.DAY_OF_MONTH, 1);
-        start.set(Calendar.HOUR_OF_DAY, 0);
-        start.set(Calendar.MINUTE, 0);
-        start.set(Calendar.SECOND, 0);
-        start.set(Calendar.MILLISECOND, 0);
-        if (cal.before(start)) start.add(Calendar.YEAR, -1);
-        long diff = (cal.getTimeInMillis() - start.getTimeInMillis()) / 86400000L;
-        return (int) (diff / 7) + 1;
     }
 
     private static String fmtDate(Calendar c) {

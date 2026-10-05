@@ -735,11 +735,11 @@ public class TimetableView extends View {
         flips.clear();
     }
 
-    /** 翻转缩放曲线：0~12% 拿起放大(1→1.12)，12%~85% 保持，85%~100% 放下缩回(1.12→1) */
+    /** 翻转缩放曲线：0~12% 拿起放大(1→1.18)，12%~85% 保持，85%~100% 放下缩回(1.18→1) */
     private float flipScale(float p) {
-        if (p <= 0.12f) return 1f + 0.12f * (p / 0.12f);
-        if (p >= 0.85f) return 1.12f - 0.12f * ((p - 0.85f) / 0.15f);
-        return 1.12f;
+        if (p <= 0.12f) return 1f + 0.18f * (p / 0.12f);
+        if (p >= 0.85f) return 1.18f - 0.18f * ((p - 0.85f) / 0.15f);
+        return 1.18f;
     }
 
     private int adjustAlpha(int color, int alpha) {

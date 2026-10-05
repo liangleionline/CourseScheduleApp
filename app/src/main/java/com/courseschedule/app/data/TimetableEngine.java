@@ -18,21 +18,16 @@ public class TimetableEngine {
     public static final int TYPE_COURSE = 0;
     public static final int TYPE_NONCOURSE = 1;
 
-    /** 计算某一天的渲染格子（当前激活课程表） */
+    /** 计算某一天的渲染格子 */
     public static List<RenderedCell> computeDay(AppData data, int day) {
-        return computeDay(data, day, data.entries);
-    }
-
-    /** 计算某一天的渲染格子（指定课程表的排布，供小组件等多课程表场景使用） */
-    public static List<RenderedCell> computeDay(AppData data, int day, List<ScheduleEntry> entries) {
         List<RenderedCell> result = new ArrayList<>();
         if (day == 1) {
-            List<RenderedCell> monday = layoutMonday(data, entries);
+            List<RenderedCell> monday = layoutMonday(data);
             result.addAll(monday);
             return result;
         }
         // 其余天：非课程带来自周一模板（贯穿全周）+ 本天课程顺序填入「非课程带之间的课程时段」
-        List<RenderedCell> monday = layoutMonday(data, entries);
+        List<RenderedCell> monday = layoutMonday(data);
         List<RenderedCell> bands = new ArrayList<>();
         for (RenderedCell c : monday) {
             if (c.type == TYPE_NONCOURSE) {
@@ -42,7 +37,7 @@ public class TimetableEngine {
         }
         // 本天课程（按存储顺序）：从周一起始时间顺序放置，遇到贯穿全周的非课程带则跳过后继续
         List<ScheduleEntry> dayCourses = new ArrayList<>();
-        for (ScheduleEntry e : entries) {
+        for (ScheduleEntry e : data.entries) {
             if (e.day == day && e.type == TYPE_COURSE) dayCourses.add(e);
         }
         int t = data.firstStartMin;
@@ -75,10 +70,10 @@ public class TimetableEngine {
     }
 
     /** 布局周一：顺序接续 */
-    private static List<RenderedCell> layoutMonday(AppData data, List<ScheduleEntry> entries) {
+    private static List<RenderedCell> layoutMonday(AppData data) {
         List<RenderedCell> cells = new ArrayList<>();
         int t = data.firstStartMin;
-        for (ScheduleEntry e : entries) {
+        for (ScheduleEntry e : data.entries) {
             if (e.day != 1) continue;
             int dur;
             if (e.type == TYPE_COURSE) {

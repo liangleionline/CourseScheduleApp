@@ -42,11 +42,9 @@ public class AppData {
     private long paletteSeed = 20260901L;
 
     private final SharedPreferences prefs;
-    private final Context appContext;
 
     private AppData(Context ctx) {
-        appContext = ctx.getApplicationContext();
-        prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs = ctx.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         load();
         syncEntriesRef();
     }
@@ -197,8 +195,6 @@ public class AppData {
     public void persist() {
         try {
             prefs.edit().putString(KEY_DATA, toJson().toString()).apply();
-            // 数据变化时同步刷新桌面小组件
-            com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(appContext);
         } catch (Exception ignored) {
         }
     }

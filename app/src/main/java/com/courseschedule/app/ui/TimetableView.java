@@ -129,6 +129,16 @@ public class TimetableView extends View {
     private ValueAnimator floatAnimator;
     private final Map<String, RectF> floatRects = new LinkedHashMap<>(); // 命中格子的 key→rect
 
+    /** 每格独立的随机摆动参数：方向、相位、频率互不相同 */
+    private static class FloatParam {
+        float phase;   // 起始相位 0~2π
+        int dirX;      // ±1：水平初始摆动方向（先左/先右）
+        int dirY;      // ±1：垂直初始摆动方向
+        float freq;    // 随机频率
+    }
+    private final Map<String, FloatParam> floatParams = new LinkedHashMap<>();
+    private final java.util.Random floatRand = new java.util.Random();
+
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
         touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
@@ -844,6 +854,7 @@ public class TimetableView extends View {
         cancelFloat();
         resetFlip(); // 翻转中的磁贴复位
         floatRects.clear();
+        floatParams.clear();
         float acc = headerH + pad;
         float dayAreaX = timeAxisW + pad;
         for (Row row : rows) {
@@ -854,9 +865,17 @@ public class TimetableView extends View {
                 RenderedCell c = row.dayCells.get(d);
                 if (c == null || c.type == TimetableEngine.TYPE_NONCOURSE) continue;
                 if (courseRefId.equals(c.refId)) {
+                    String k = d + "|" + c.startMin + "|" + c.refId;
                     RectF r = new RectF();
                     r.set(dayAreaX + idx * colW + 2, acc + 1, dayAreaX + idx * colW + colW - 2, acc + rh - 1);
-                    floatRects.put(d + "|" + c.startMin + "|" + c.refId, r);
+                    floatRects.put(k, r);
+                    // 每格独立随机：先左/先右、相位、频率各不相同
+                    FloatParam p = new FloatParam();
+                    p.phase = floatRand.nextFloat() * (float) (Math.PI * 2);
+                    p.dirX = floatRand.nextBoolean() ? 1 : -1;
+                    p.dirY = floatRand.nextBoolean() ? 1 : -1;
+                    p.freq = 1.8f + floatRand.nextFloat() * 1.2f; // 1.8~3.0 rad/s
+                    floatParams.put(k, p);
                 }
             }
             acc += rh;
@@ -891,6 +910,7 @@ public class TimetableView extends View {
         }
         floatCourseRefId = null;
         floatRects.clear();
+        floatParams.clear();
         invalidate();
     }
 
@@ -905,7 +925,7 @@ public class TimetableView extends View {
         return Math.min(up, down);
     }
 
-    /** 浮起磁贴：所有同课程磁贴最后绘制，上浮放大 + 独立飘忽抖动 + 极淡投影 */
+    /** 浮起磁贴：所有同课程磁贴最后绘制，上浮放大 + 每格独立随机摆动（幅度轻） + 极淡投影 */
     private void drawFloatingCells(Canvas canvas) {
         if (floatCourseRefId == null || floatRects.isEmpty()) return;
         Course c = courseById.get(floatCourseRefId);
@@ -915,13 +935,14 @@ public class TimetableView extends View {
         float density = getResources().getDisplayMetrics().density;
         float liftPx = 18f * density * lift;              // 上浮高度
         float scale = 1f + 0.08f * lift;                  // 放大 8%
-        float t = (SystemClock.uptimeMillis() - floatStart) / 1000f; // 实时时间驱动抖动
+        float t = (SystemClock.uptimeMillis() - floatStart) / 1000f; // 实时时间驱动摆动
         for (Map.Entry<String, RectF> e : floatRects.entrySet()) {
             RectF r = e.getValue();
-            float phase = (float) Math.abs(r.hashCode() % 100) / 100f * (float) (Math.PI * 2); // 每格随机相位
-            float dx = (float) (Math.sin(t * 2.6f + phase) * 0.8f * density * lift);
-            float dy = (float) (Math.cos(t * 1.9f + phase) * 0.6f * density * lift);
-            float rot = (float) (Math.sin(t * 3.3f + phase) * 0.8f * lift); // 轻微旋转抖动(度)
+            FloatParam p = floatParams.get(e.getKey());
+            if (p == null) continue;
+            float dx = (float) (Math.sin(t * p.freq + p.phase) * 0.5f * density * p.dirX * lift);
+            float dy = (float) (Math.cos(t * p.freq * 0.8f + p.phase) * 0.4f * density * p.dirY * lift);
+            float rot = (float) (Math.sin(t * p.freq * 1.3f + p.phase) * 0.5f * lift); // 轻微旋转摆动(度)
             canvas.save();
             canvas.translate(r.centerX() + dx, r.centerY() - liftPx + dy);
             canvas.rotate(rot);

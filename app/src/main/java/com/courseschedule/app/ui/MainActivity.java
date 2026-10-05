@@ -241,6 +241,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         refresh();
+        // 回到前台（后台切回/设置页返回）时重播磁贴入场动画
+        if (timetable.getVisibility() == View.VISIBLE) timetable.playEntrance();
         // 打开 App 后主动刷新桌面小组件
         try {
             com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(this);

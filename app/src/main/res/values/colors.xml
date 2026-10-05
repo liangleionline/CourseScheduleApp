@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#5C6BC0</color>
-    <color name="bg">#F6F8FC</color>
-    <color name="noncourse_bg">#E9EEF5</color>
-    <color name="text_main">#3A4151</color>
+    <color name="primary">#0078D7</color>
+    <color name="bg">#F2F2F2</color>
+    <color name="noncourse_bg">#E1E1E1</color>
+    <color name="text_main">#1A1A1A</color>
     <!-- 小组件配色（与开源项目一致） -->
     <color name="widget_bg">#FEF7FF</color>
     <color name="widget_text_primary">#2C3E50</color>

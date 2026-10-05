@@ -1,6 +1,5 @@
 package com.courseschedule.app.widget;
 
-import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.graphics.Color;
@@ -12,49 +11,56 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.courseschedule.app.data.AppData;
 
 /**
  * 添加小组件时的配置页：选择要加载哪一张课程表。
  */
-public class WidgetConfigureActivity extends Activity {
+public class WidgetConfigureActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setResult(RESULT_CANCELED, resultIntent()); // 默认取消
 
-        AppData data = AppData.get(this);
-        data.ensureTimetable();
-        final int widgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
-                AppWidgetManager.INVALID_APPWIDGET_ID);
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        try {
+            AppData data = AppData.get(this);
+            data.ensureTimetable();
+            final int widgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+                    AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                finish();
+                return;
+            }
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setBackgroundColor(0xFFF6F8FC);
+            root.setPadding(dp(16), dp(24), dp(16), dp(16));
+            setContentView(root);
+
+            TextView title = new TextView(this);
+            title.setText("选择要显示的课程表");
+            title.setTextColor(0xFF3A4151);
+            title.setTextSize(18);
+            title.setTypeface(null, Typeface.BOLD);
+            root.addView(title);
+
+            TextView hint = new TextView(this);
+            hint.setText("小组件将展示所选课程表的今天 / 明天课程安排。");
+            hint.setTextColor(0xFF8A94A6);
+            hint.setTextSize(13);
+            hint.setPadding(0, dp(6), 0, dp(12));
+            root.addView(hint);
+
+            for (AppData.Timetable t : data.timetables) {
+                root.addView(ttRow(t, widgetId));
+            }
+        } catch (Exception e) {
+            // 配置页异常时返回取消，避免桌面端报错
             finish();
-            return;
-        }
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFF6F8FC);
-        root.setPadding(dp(16), dp(24), dp(16), dp(16));
-        setContentView(root);
-
-        TextView title = new TextView(this);
-        title.setText("选择要显示的课程表");
-        title.setTextColor(0xFF3A4151);
-        title.setTextSize(18);
-        title.setTypeface(null, Typeface.BOLD);
-        root.addView(title);
-
-        TextView hint = new TextView(this);
-        hint.setText("小组件将展示所选课程表的今天 / 明天课程安排。");
-        hint.setTextColor(0xFF8A94A6);
-        hint.setTextSize(13);
-        hint.setPadding(0, dp(6), 0, dp(12));
-        root.addView(hint);
-
-        for (AppData.Timetable t : data.timetables) {
-            root.addView(ttRow(t, widgetId));
         }
     }
 

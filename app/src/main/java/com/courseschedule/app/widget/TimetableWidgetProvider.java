@@ -38,6 +38,12 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager,
+                                          int appWidgetId, android.os.Bundle newOptions) {
+        updateWidget(context, appWidgetManager, appWidgetId);
+    }
+
     /** 刷新所有已添加的小组件 */
     public static void refreshAll(Context context) {
         try {
@@ -58,7 +64,17 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
             if (t.id.equals(ttId)) { tt = t; break; }
         }
         if (tt == null) tt = data.activeTimetable();
-        if (tt == null) return;
+        if (tt == null) {
+            // 还没有任何课程表：显示占位提示，避免空白
+            RemoteViews empty = new RemoteViews(context.getPackageName(), R.layout.widget_timetable);
+            empty.setTextViewText(R.id.today_title, "还没有课程表");
+            empty.setTextViewText(R.id.today_count, "");
+            empty.setTextViewText(R.id.week_num, "");
+            empty.setTextViewText(R.id.tomorrow_title, "请先打开课程表");
+            empty.setTextViewText(R.id.tomorrow_count, "App 创建课程表");
+            mgr.updateAppWidget(appWidgetId, empty);
+            return;
+        }
         RemoteViews views = buildViews(context, data, tt);
         mgr.updateAppWidget(appWidgetId, views);
     }

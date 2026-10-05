@@ -19,13 +19,33 @@
             android:layout_height="match_parent"
             android:src="@drawable/widget_bg_rounded" />
 
-        <!-- 双列内容容器（保持背景透明） -->
+        <!-- 标题栏 + 双列内容容器（保持背景透明） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:baselineAligned="false"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:padding="10dp">
+
+            <!-- 课程表名称（跟随小组件配置的课程表） -->
+            <TextView
+                android:id="@+id/widget_timetable_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/widget_text_primary"
+                android:textSize="12dp"
+                android:textStyle="bold"
+                tools:text="张三的课程表" />
+
+            <!-- 双列内容容器（今日/明日） -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:baselineAligned="false"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp">
 
             <!-- 左侧：今日课程区域 -->
             <RelativeLayout
@@ -174,6 +194,7 @@
                         android:textSize="12dp" />
                 </LinearLayout>
             </RelativeLayout>
+            </LinearLayout>
         </LinearLayout>
     </FrameLayout>
 

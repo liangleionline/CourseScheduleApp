@@ -103,6 +103,9 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         String widgetTid = getWidgetTimetable(context, appWidgetId);
         if (widgetTid != null && !data.containsTimetable(widgetTid)) widgetTid = null;
 
+        // 3.2 标题栏：显示该小组件当前显示的课程表名称
+        rv.setTextViewText(R.id.widget_timetable_title, timetableName(data, widgetTid));
+
         // 4. 假期/无课表处理（无课程表时显示覆盖视图）
         if (data.timetables.isEmpty() || !hasAnyCourse(data, widgetTid)) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE);
@@ -246,9 +249,19 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1;
     }
 
+    /** 课程表名称：配置的课程表 > App 激活课程表 > 默认文案 */
+    private static String timetableName(AppData data, String widgetTid) {
+        if (widgetTid != null) {
+            for (AppData.Timetable t : data.timetables) {
+                if (t.id.equals(widgetTid)) return t.name;
+            }
+        }
+        AppData.Timetable at = data.activeTimetable();
+        return at != null ? at.name : "课程表";
+    }
+
     /** 某天的课程格（按开始时间排序）；widgetTid 为空时用 App 激活课程表 */
-    private static List<RenderedCell> coursesOf(AppData data, int day, String widgetTid) {
-        List<RenderedCell> out = new ArrayList<>();
+    private static List<RenderedCell> coursesOf(AppData data, int day, String widgetTid) {        List<RenderedCell> out = new ArrayList<>();
         List<RenderedCell> cells = widgetTid != null
                 ? data.computeDayOf(widgetTid, day)
                 : TimetableEngine.computeDay(data, day);

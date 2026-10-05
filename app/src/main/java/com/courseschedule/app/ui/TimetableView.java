@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.SystemClock;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -76,6 +77,13 @@ public class TimetableView extends View {
     private float nonCourseReveal = 0f; // 0 隐藏，1 全展开
     private ValueAnimator animator;
 
+    /** 磁贴入场动画：每次数据刷新时课程色块依次从上方弹性落下（Windows 磁贴感） */
+    private static final long ENTRANCE_DUR = 650L;
+    private static final long ENTRANCE_STAGGER = 60L;
+    private static final float ENTRANCE_DROP_DP = 26f;
+    private long entranceStart = -1L;
+    private final OvershootInterpolator entranceInterp = new OvershootInterpolator(3f);
+
     private float downX, downY;
     private boolean moved;
     private boolean peekNotified;
@@ -136,6 +144,7 @@ public class TimetableView extends View {
         rows.addAll(rowMap.values());
         cancelAnim();
         nonCourseReveal = 0f;
+        entranceStart = -1L; // 数据刷新后重新触发磁贴入场动画
         invalidate();
     }
 
@@ -227,14 +236,20 @@ public class TimetableView extends View {
         }
 
         float y = headerH + pad;
+        // 磁贴入场动画：首次绘制时启动，行按下落进度偏移
+        if (entranceStart < 0L) entranceStart = SystemClock.uptimeMillis();
+        long entranceNow = SystemClock.uptimeMillis();
+        boolean entranceRunning = entranceNow < entranceStart + ENTRANCE_DUR + (long) rows.size() * ENTRANCE_STAGGER;
+        int rowIdx = 0;
         for (Row row : rows) {
             boolean band = isBandRow(row);
             float rh = band ? bandH : rowH;
             if (rh <= 0) continue; // 非课程收起时无高度
 
-            canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+            float yDraw = y + rowDropOffset(rowIdx);
+            canvas.drawLine(dayAreaX, yDraw, w - pad, yDraw, linePaint);
             timePaint.setColor(0xFF666666);
-            canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
+            canvas.drawText(fmt(row.start), timeAxisW / 2f, yDraw + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
             if (band) {
                 RenderedCell bandCell = null;
@@ -244,7 +259,7 @@ public class TimetableView extends View {
                 // 随收起进度淡出，消除收起最后一瞬的文字闪烁
                 float fade = reveal;
                 int bandAlpha = (int) (255 * Math.min(1f, fade));
-                rect.set(dayAreaX + 2, y + 1, w - pad - 2, y + rh - 1);
+                rect.set(dayAreaX + 2, yDraw + 1, w - pad - 2, yDraw + rh - 1);
                 cellPaint.setColor(adjustAlpha(ColorUtil.NONCOURSE_BG, bandAlpha));
                 canvas.drawRect(rect, cellPaint); // Metro：直角扁平块
                 if (rh >= dp(14) && fade > 0.05f) {
@@ -260,16 +275,28 @@ public class TimetableView extends View {
                     Course c = courseById.get(cell.refId);
                     if (c == null) continue;
                     float x = dayAreaX + idx * colW;
-                    rect.set(x + 2, y + 1, x + colW - 2, y + rh - 1);
+                    rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
                     drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
                     drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
                 }
             }
+            rowIdx++;
             y += rh;
         }
         canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+        if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
+    }
+
+    /** 磁贴入场偏移：行按错开延迟从上方掉下，Overshoot 过冲回弹形成 Windows 磁贴抖动感 */
+    private float rowDropOffset(int rowIdx) {
+        float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
+        long elapsed = SystemClock.uptimeMillis() - entranceStart - rowIdx * ENTRANCE_STAGGER;
+        if (elapsed <= 0L) return -dropPx;
+        float p = Math.min(1f, elapsed / (float) ENTRANCE_DUR);
+        float t = entranceInterp.getInterpolation(p);
+        return (t - 1f) * dropPx;
     }
 
     /** 平面玻璃罩层：整块色块被一层均匀的极淡白玻璃覆盖，无渐变、无高光、无边缘线，保持完全平面 */

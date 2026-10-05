@@ -122,7 +122,6 @@ public class TimetableView extends View {
     private String lastTapKey;
     private String pendingTapKey;      // 挂起的单击（等待双击判定）
     private RenderedCell pendingTapCell;
-    private int pendingTapDay;
     private Runnable pendingTapRunnable;
     private String floatCourseRefId;    // 正在上浮的课程 refId（null=无）
     private float floatProgress;        // 0~1
@@ -719,9 +718,10 @@ public class TimetableView extends View {
         // 单击延迟执行：等待 300ms 内的第二击（双击时第一下不翻转）
         pendingTapKey = key;
         pendingTapCell = cell;
-        pendingTapDay = day;
         pendingTapRunnable = () -> {
             pendingTapKey = null;
+            pendingTapCell = null;
+            pendingTapRunnable = null; // 执行后必须清空引用，避免被误判为"挂起中的上一击"
             singleTapAction(key, cell, day);
         };
         postDelayed(pendingTapRunnable, DOUBLE_TAP_MS);
@@ -756,6 +756,12 @@ public class TimetableView extends View {
 
     /** 开始翻转指定磁贴（400ms：先放大拿起，翻转 180°，再缩小放下） */
     private void startFlip(String key, RenderedCell cell, int day) {
+        // 若该磁贴已有翻转实例（如正在翻回中又被点击），先取消移除，避免新旧翻转叠加
+        FlipAnim exist = findFlip(key);
+        if (exist != null) {
+            if (exist.anim != null) exist.anim.cancel();
+            flips.remove(exist);
+        }
         RectF r = new RectF();
         float acc = headerH + pad;
         float dayAreaX = timeAxisW + pad;

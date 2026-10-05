@@ -99,8 +99,12 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         AppData data = AppData.get(context);
         if (data.timetables.isEmpty()) data.ensureTimetable();
 
+        // 3.1 小组件配置的课程表（添加时可选择）；无效则跟随 App 当前激活课程表
+        String widgetTid = getWidgetTimetable(context, appWidgetId);
+        if (widgetTid != null && !data.containsTimetable(widgetTid)) widgetTid = null;
+
         // 4. 假期/无课表处理（无课程表时显示覆盖视图）
-        if (data.timetables.isEmpty() || !hasAnyCourse(data)) {
+        if (data.timetables.isEmpty() || !hasAnyCourse(data, widgetTid)) {
             rv.setViewVisibility(R.id.inner_content_card, View.GONE);
             rv.setViewVisibility(R.id.container_full_status, View.VISIBLE);
             rv.setTextViewText(R.id.tv_full_status_title, "假期中");
@@ -122,10 +126,10 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         // 今日：仅剩余课程（结束时间晚于当前时刻）
         int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
         List<RenderedCell> remainingToday = new ArrayList<>();
-        for (RenderedCell c : coursesOf(data, todayDow)) {
+        for (RenderedCell c : coursesOf(data, todayDow, widgetTid)) {
             if (c.endMin > now) remainingToday.add(c);
         }
-        List<RenderedCell> tomorrowCourses = coursesOf(data, tomorrowDow);
+        List<RenderedCell> tomorrowCourses = coursesOf(data, tomorrowDow, widgetTid);
 
         // 渲染左侧：今日课程
         renderColumn(context, rv, appWidgetId,
@@ -242,21 +246,41 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1;
     }
 
-    /** 某天的课程格（按开始时间排序） */
-    private static List<RenderedCell> coursesOf(AppData data, int day) {
+    /** 某天的课程格（按开始时间排序）；widgetTid 为空时用 App 激活课程表 */
+    private static List<RenderedCell> coursesOf(AppData data, int day, String widgetTid) {
         List<RenderedCell> out = new ArrayList<>();
-        for (RenderedCell c : TimetableEngine.computeDay(data, day)) {
+        List<RenderedCell> cells = widgetTid != null
+                ? data.computeDayOf(widgetTid, day)
+                : TimetableEngine.computeDay(data, day);
+        for (RenderedCell c : cells) {
             if (c.type == TimetableEngine.TYPE_COURSE) out.add(c);
         }
         return out;
     }
 
     /** 是否有任何课程（判断是否显示假期覆盖视图） */
-    private static boolean hasAnyCourse(AppData data) {
+    private static boolean hasAnyCourse(AppData data, String widgetTid) {
         for (int d = 1; d <= 7; d++) {
-            if (!coursesOf(data, d).isEmpty()) return true;
+            if (!coursesOf(data, d, widgetTid).isEmpty()) return true;
         }
         return false;
+    }
+
+    // ---------- 小组件课程表配置 ----------
+
+    private static final String WIDGET_PREFS = "widget_prefs";
+    private static final String KEY_PREFIX = "timetable_";
+
+    /** 读取某小组件配置的课程表 id（未配置返回 null → 跟随 App 激活课程表） */
+    public static String getWidgetTimetable(Context ctx, int appWidgetId) {
+        return ctx.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_PREFIX + appWidgetId, null);
+    }
+
+    /** 保存某小组件配置的课程表 id */
+    public static void setWidgetTimetable(Context ctx, int appWidgetId, String timetableId) {
+        ctx.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_PREFIX + appWidgetId, timetableId).apply();
     }
 
     private static String fmtDate(Calendar c) {

@@ -25,6 +25,15 @@
             android:name=".ui.SettingsActivity"
             android:exported="false" />
 
+        <!-- 小组件配置页：添加/长按重配时选择课程表 -->
+        <activity
+            android:name=".widget.WidgetConfigureActivity"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.TimetableWidgetProvider"
             android:exported="false"

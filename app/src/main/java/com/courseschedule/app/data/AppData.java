@@ -118,6 +118,28 @@ public class AppData {
         entries = t == null ? new ArrayList<>() : t.entries;
     }
 
+    /** 计算指定课程表某天的格子（临时切换 entries 引用，不改变当前激活状态，不持久化） */
+    public List<RenderedCell> computeDayOf(String timetableId, int day) {
+        Timetable t = null;
+        for (Timetable tt : timetables) {
+            if (tt.id.equals(timetableId)) { t = tt; break; }
+        }
+        if (t == null) return TimetableEngine.computeDay(this, day);
+        List<ScheduleEntry> saved = entries;
+        entries = t.entries;
+        try {
+            return TimetableEngine.computeDay(this, day);
+        } finally {
+            entries = saved;
+        }
+    }
+
+    /** 是否存在指定 id 的课程表 */
+    public boolean containsTimetable(String id) {
+        for (Timetable t : timetables) if (t.id.equals(id)) return true;
+        return false;
+    }
+
     /** 是否已有课表排布数据 */
     public boolean hasSchedule() {
         return !entries.isEmpty();

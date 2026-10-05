@@ -252,8 +252,10 @@ public class TimetableView extends View {
             float rh = band ? bandH : rowH;
             if (rh <= 0) continue; // 非课程收起时无高度
 
-            // 分隔线与时间轴保持布局位置，磁贴各自从上方掉下覆盖
-            canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+            // 分隔线：动画期间隐藏（磁贴错位落下时会露出横线），结束后再显示
+            if (!entranceRunning) {
+                canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+            }
             timePaint.setColor(0xFF666666);
             canvas.drawText(fmt(row.start), timeAxisW / 2f, y + rh / 2f + timePaint.getTextSize() * 0.35f, timePaint);
 
@@ -294,7 +296,7 @@ public class TimetableView extends View {
             rowIdx++;
             y += rh;
         }
-        canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
+        if (!entranceRunning) canvas.drawLine(dayAreaX, y, w - pad, y, linePaint); // 底边线同动画期间隐藏
         if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
     }
 

@@ -98,11 +98,16 @@ public class TimetableView extends View {
     private ValueAnimator pressAnimator;
 
     // ---------- 磁贴翻转详情（Win8：点击磁贴翻转到背面显示课程详情） ----------
-    private String flipKey;         // 正在翻转/已翻转的磁贴（day|startMin|refId）
-    private float flipProgress;     // 0~1 翻转进度（180°）
-    private String flipTime;        // 背面显示的时间文本
-    private ValueAnimator flipAnimator;
-    private final RectF flipRect = new RectF();
+    /** 翻转实例：支持多磁贴并行翻转（点击新磁贴时旧磁贴自动翻回） */
+    private static class FlipAnim {
+        String key;         // day|startMin|refId
+        final RectF rect = new RectF();
+        String time;        // 背面时间文本
+        float progress;     // 0~1
+        ValueAnimator anim;
+        boolean forward;    // true=翻向背面 false=翻回正面
+    }
+    private final List<FlipAnim> flips = new ArrayList<>();
     private final android.graphics.Camera flipCamera = new android.graphics.Camera();
     private final android.graphics.Matrix flipMatrix = new android.graphics.Matrix();
 
@@ -311,7 +316,7 @@ public class TimetableView extends View {
                     rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
                     // 翻转中的磁贴：跳过常规绘制，循环结束后单独绘制（3D 翻转）
                     String key = day + "|" + cell.startMin + "|" + cell.refId;
-                    if (flipKey != null && flipKey.equals(key)) {
+                    if (isFlipping(key)) {
                         continue;
                     }
                     cellPaint.setColor(c.bgColor);
@@ -342,43 +347,48 @@ public class TimetableView extends View {
         canvas.drawRect(r, glassPaint);
     }
 
-    /** 翻转磁贴：Camera 绕 Y 轴翻转 180°，前半正面、后半背面（背面正读显示详情） */
+    /** 翻转磁贴：Camera 绕 Y 轴翻转 180°，前半正面、后半背面（背面正读显示详情）；翻转全程带拿起放大→放下缩回 */
     private void drawFlippedCell(Canvas canvas) {
-        if (flipKey == null || flipProgress <= 0.001f) return;
-        String[] parts = flipKey.split("\\|");
-        if (parts.length < 3) return;
-        Course c = courseById.get(parts[2]);
-        if (c == null) return;
-        RectF r = flipRect;
-        if (r.width() <= 0 || r.height() <= 0) return;
-        float deg = flipProgress * 180f;
+        if (flips.isEmpty()) return;
+        for (FlipAnim f : flips) {
+            if (f.progress <= 0.001f) continue;
+            String[] parts = f.key.split("\\|");
+            if (parts.length < 3) continue;
+            Course c = courseById.get(parts[2]);
+            if (c == null) continue;
+            RectF r = f.rect;
+            if (r.width() <= 0 || r.height() <= 0) continue;
+            float deg = f.progress * 180f;
+            float scale = flipScale(f.progress); // 拿起放大 → 放下缩回
 
-        canvas.save();
-        flipCamera.save();
-        if (deg <= 90f) {
-            flipCamera.rotateY(deg); // 正面：0→90
-        } else {
-            flipCamera.rotateY(deg - 180f); // 背面：-90→0，正读显示
+            canvas.save();
+            flipCamera.save();
+            if (deg <= 90f) {
+                flipCamera.rotateY(deg); // 正面：0→90
+            } else {
+                flipCamera.rotateY(deg - 180f); // 背面：-90→0，正读显示
+            }
+            flipCamera.getMatrix(flipMatrix);
+            flipMatrix.preTranslate(-r.centerX(), -r.centerY());
+            flipMatrix.postTranslate(r.centerX(), r.centerY());
+            canvas.concat(flipMatrix);
+            canvas.scale(scale, scale, r.centerX(), r.centerY()); // 拿起/放下
+
+            cellPaint.setColor(c.bgColor);
+            canvas.drawRect(r, cellPaint); // 直角扁平磁贴
+            drawTileGlass(canvas, r, 255); // 平面玻璃罩层
+
+            if (deg <= 90f) {
+                // 正面：课程名 + 教师
+                drawCellText(canvas, r, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
+            } else {
+                // 背面：课程名 + 教师·时间 + 点击编辑
+                String meta = (c.teacher != null && !c.teacher.isEmpty() ? c.teacher + " · " : "") + f.time;
+                drawFlipBack(canvas, r, c.name, meta, c.textColor);
+            }
+            canvas.restore();
+            flipCamera.restore();
         }
-        flipCamera.getMatrix(flipMatrix);
-        flipMatrix.preTranslate(-r.centerX(), -r.centerY());
-        flipMatrix.postTranslate(r.centerX(), r.centerY());
-        canvas.concat(flipMatrix);
-
-        cellPaint.setColor(c.bgColor);
-        canvas.drawRect(r, cellPaint); // 直角扁平磁贴
-        drawTileGlass(canvas, r, 255); // 平面玻璃罩层
-
-        if (deg <= 90f) {
-            // 正面：课程名 + 教师
-            drawCellText(canvas, r, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
-        } else {
-            // 背面：课程名 + 教师·时间 + 点击编辑
-            String meta = (c.teacher != null && !c.teacher.isEmpty() ? c.teacher + " · " : "") + flipTime;
-            drawFlipBack(canvas, r, c.name, meta, c.textColor);
-        }
-        canvas.restore();
-        flipCamera.restore();
     }
 
     /** 翻转背面排版：课程名（可两行） + 教师·时间 + 底部"点击编辑" */
@@ -633,23 +643,25 @@ public class TimetableView extends View {
             return;
         }
         String key = day + "|" + cell.startMin + "|" + cell.refId;
-        if (key.equals(flipKey) && flipProgress >= 1f) {
+        FlipAnim f = findFlip(key);
+        if (f != null && f.forward && f.progress >= 1f) {
             // 已翻转到背面：翻回并弹出编辑
-            flipBack();
+            flipBack(key);
             listener.onCellClick(day, cell.type, cell.refId, cell.startMin, cell.endMin);
-        } else {
-            // 课程磁贴：翻转到背面显示详情
-            pressRelease(true);
-            startFlip(key, cell, day);
+            return;
         }
+        // 点击新磁贴：之前已完成翻转的磁贴自动翻回（带动画）
+        for (FlipAnim other : new ArrayList<>(flips)) {
+            if (other.forward && other.progress >= 1f) flipBack(other.key);
+        }
+        // 课程磁贴：翻转到背面显示详情（拿起放大 → 翻转 → 放下缩回）
+        pressRelease(true);
+        startFlip(key, cell, day);
     }
 
-    /** 开始翻转指定磁贴（400ms，正面→背面显示详情） */
+    /** 开始翻转指定磁贴（400ms：先放大拿起，翻转 180°，再缩小放下） */
     private void startFlip(String key, RenderedCell cell, int day) {
-        resetFlip();
-        flipKey = key;
-        flipTime = fmt(cell.startMin) + "-" + fmt(cell.endMin);
-        // 磁贴矩形：布局坐标（与绘制一致）
+        RectF r = new RectF();
         float acc = headerH + pad;
         float dayAreaX = timeAxisW + pad;
         for (Row row : rows) {
@@ -661,49 +673,73 @@ public class TimetableView extends View {
                 if (c == null) continue;
                 if (d == day && c.startMin == cell.startMin && c.refId.equals(cell.refId)) {
                     float x = dayAreaX + idx * colW;
-                    flipRect.set(x + 2, acc + 1, x + colW - 2, acc + rh - 1);
+                    r.set(x + 2, acc + 1, x + colW - 2, acc + rh - 1);
                 }
             }
             acc += rh;
         }
-        flipProgress = 0f;
-        flipAnimator = ValueAnimator.ofFloat(0f, 1f);
-        flipAnimator.setDuration(400);
-        flipAnimator.setInterpolator(new DecelerateInterpolator(2.0f));
-        flipAnimator.addUpdateListener(a -> {
-            flipProgress = (float) a.getAnimatedValue();
+        FlipAnim f = new FlipAnim();
+        f.key = key;
+        f.rect.set(r);
+        f.time = fmt(cell.startMin) + "-" + fmt(cell.endMin);
+        f.forward = true;
+        f.progress = 0f;
+        f.anim = ValueAnimator.ofFloat(0f, 1f);
+        f.anim.setDuration(400);
+        f.anim.setInterpolator(new DecelerateInterpolator(2.0f));
+        f.anim.addUpdateListener(a -> {
+            f.progress = (float) a.getAnimatedValue();
             invalidate();
         });
-        flipAnimator.start();
+        flips.add(f);
+        f.anim.start();
     }
 
-    /** 翻回正面（从背面） */
-    private void flipBack() {
-        if (flipKey == null) return;
-        if (flipAnimator != null) flipAnimator.cancel();
-        float from = flipProgress;
-        flipAnimator = ValueAnimator.ofFloat(from, 0f);
-        flipAnimator.setDuration(400);
-        flipAnimator.setInterpolator(new DecelerateInterpolator(2.0f));
-        flipAnimator.addUpdateListener(a -> {
-            flipProgress = (float) a.getAnimatedValue();
+    /** 翻回正面（从背面，带动画） */
+    private void flipBack(String key) {
+        FlipAnim f = findFlip(key);
+        if (f == null) return;
+        if (f.anim != null) f.anim.cancel();
+        f.forward = false;
+        float from = f.progress;
+        f.anim = ValueAnimator.ofFloat(from, 0f);
+        f.anim.setDuration(400);
+        f.anim.setInterpolator(new DecelerateInterpolator(2.0f));
+        f.anim.addUpdateListener(a -> {
+            f.progress = (float) a.getAnimatedValue();
             invalidate();
         });
-        flipAnimator.addListener(new AnimatorListenerAdapter() {
+        f.anim.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(android.animation.Animator animation) {
-                flipKey = null;
+                flips.remove(f);
                 invalidate();
             }
         });
-        flipAnimator.start();
+        f.anim.start();
+    }
+
+    private FlipAnim findFlip(String key) {
+        for (FlipAnim f : flips) if (f.key.equals(key)) return f;
+        return null;
+    }
+
+    private boolean isFlipping(String key) {
+        FlipAnim f = findFlip(key);
+        return f != null && f.progress > 0.001f;
     }
 
     /** 复位翻转状态（数据刷新/滑动/下拉时） */
     private void resetFlip() {
-        if (flipAnimator != null) { flipAnimator.cancel(); flipAnimator = null; }
-        flipKey = null;
-        flipProgress = 0f;
+        for (FlipAnim f : flips) if (f.anim != null) f.anim.cancel();
+        flips.clear();
+    }
+
+    /** 翻转缩放曲线：0~12% 拿起放大(1→1.07)，12%~85% 保持，85%~100% 放下缩回(1.07→1) */
+    private float flipScale(float p) {
+        if (p <= 0.12f) return 1f + 0.07f * (p / 0.12f);
+        if (p >= 0.85f) return 1.07f - 0.07f * ((p - 0.85f) / 0.15f);
+        return 1.07f;
     }
 
     private int adjustAlpha(int color, int alpha) {

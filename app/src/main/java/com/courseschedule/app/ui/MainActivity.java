@@ -14,7 +14,6 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.courseschedule.app.R;
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.Course;
 import com.courseschedule.app.data.NonCourseItem;
@@ -83,12 +82,8 @@ public class MainActivity extends AppCompatActivity {
         timetable.setListener(new TimetableView.Listener() {
             @Override
             public void onCellClick(int day, int type, String refId, int startMin, int endMin) {
-                showDetail(day, type, refId, startMin, endMin);
-            }
-
-            @Override
-            public void onPeekStart() {
-                hideDetail();
+                // 课程：长按触发 → 编辑；非课程：直接编辑
+                MainActivity.this.onCellClick(day, type, refId);
             }
 
             @Override
@@ -101,19 +96,9 @@ public class MainActivity extends AppCompatActivity {
         tl.weight = 1;
         content.addView(timetable, tl);
 
-        // 课程详情面板（底部，默认隐藏）
-        detailPanel = new LinearLayout(this);
-        detailPanel.setOrientation(LinearLayout.VERTICAL);
-        detailPanel.setVisibility(View.GONE);
-        detailPanel.setPadding(dp(16), dp(10), dp(16), dp(12));
-        detailPanel.setBackgroundColor(0xFFFFFFFF);
-        content.addView(detailPanel, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        buildDetailPanel();
-
         // 底部提示
         TextView footer = new TextView(this);
-        footer.setText("点击课程查看详情 · 按住下拉查看非课程项 · 左右滑动切换课程表");
+        footer.setText("点击课程翻转查看详情 · 长按课程修改 · 按住下拉查看非课程项 · 左右滑动切换课程表");
         footer.setTextColor(0xFF666666);
         footer.setTextSize(12);
         footer.setGravity(Gravity.CENTER);
@@ -207,7 +192,6 @@ public class MainActivity extends AppCompatActivity {
         int ni = idx + direction;
         if (ni < 0 || ni >= data.timetables.size()) return;
         data.setActiveTimetable(data.timetables.get(ni).id);
-        hideDetail();
         timetable.setData(data);
         titleView.setText(data.activeTimetable().name);
         float w = root.getWidth();
@@ -234,7 +218,6 @@ public class MainActivity extends AppCompatActivity {
                     : "点击下方按钮，创建第一个课程表\n多孩家庭可为每个孩子各建一个课程表，左右滑动切换");
             createBtn.setText(any ? "开始排课" : "创建课程表");
         }
-        hideDetail();
     }
 
     @Override
@@ -262,96 +245,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             showNonCourseEditDialog(refId);
         }
-    }
-
-    // ---------- 课程详情面板 ----------
-    private LinearLayout detailPanel;
-    private TextView detailName, detailMeta, detailExtra;
-    private int detailDay, detailType;
-    private String detailRefId;
-
-    private void buildDetailPanel() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        detailName = new TextView(this);
-        detailName.setTextSize(17);
-        detailName.setTypeface(null, Typeface.BOLD);
-        detailName.setTextColor(0xFF1A1A1A);
-        detailName.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(detailName);
-
-        TextView edit = new TextView(this);
-        edit.setText("编辑");
-        edit.setTextSize(14);
-        edit.setTextColor(0xFF0078D7);
-        edit.setGravity(Gravity.CENTER);
-        edit.setPadding(dp(14), dp(6), dp(14), dp(6));
-        edit.setBackground(roundedBg(0xFFE5F1FB));
-        edit.setOnClickListener(v -> {
-            if (detailType == TimetableEngine.TYPE_COURSE) {
-                showCourseEditDialog(detailDay, detailRefId);
-            } else {
-                showNonCourseEditDialog(detailRefId);
-            }
-        });
-        row.addView(edit);
-
-        TextView close = new TextView(this);
-        close.setText("✕");
-        close.setTextSize(16);
-        close.setTextColor(0xFF666666);
-        close.setGravity(Gravity.CENTER);
-        close.setPadding(dp(10), dp(6), dp(4), dp(6));
-        close.setOnClickListener(v -> hideDetail());
-        row.addView(close);
-        detailPanel.addView(row, lpWrap());
-
-        detailMeta = new TextView(this);
-        detailMeta.setTextSize(13);
-        detailMeta.setTextColor(0xFF0078D7);
-        detailMeta.setPadding(0, dp(4), 0, 0);
-        detailPanel.addView(detailMeta, lpWrap());
-
-        detailExtra = new TextView(this);
-        detailExtra.setTextSize(13);
-        detailExtra.setTextColor(0xFF666666);
-        detailExtra.setPadding(0, dp(4), 0, 0);
-        detailPanel.addView(detailExtra, lpWrap());
-    }
-
-    private void showDetail(int day, int type, String refId, int startMin, int endMin) {
-        detailDay = day;
-        detailType = type;
-        detailRefId = refId;
-        String name = "";
-        String meta = "";
-        String extra = "";
-        if (type == TimetableEngine.TYPE_COURSE) {
-            Course c = data.getCourse(refId);
-            if (c != null) {
-                name = c.name;
-                meta = c.teacher == null || c.teacher.isEmpty() ? "暂无教师" : "教师：" + c.teacher;
-            }
-        } else {
-            NonCourseItem n = data.getNonCourse(refId);
-            if (n != null) name = n.name;
-        }
-        String week = WEEK_NAMES[day - 1];
-        String time = fmt(startMin) + " - " + fmt(endMin);
-        extra = week + " · " + time + "（非课程项为贯穿全周项目）";
-        if (type == TimetableEngine.TYPE_COURSE) {
-            extra = week + " · " + time;
-        }
-        detailName.setText(name);
-        detailMeta.setText(meta);
-        detailExtra.setText(extra);
-        detailPanel.setVisibility(View.VISIBLE);
-    }
-
-    private void hideDetail() {
-        detailPanel.setVisibility(View.GONE);
     }
 
     private String fmt(int m) {
@@ -444,8 +337,6 @@ public class MainActivity extends AppCompatActivity {
         refresh();
     }
 
-    private static final String[] WEEK_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
-
     private int dp(int v) {        return (int) (v * getResources().getDisplayMetrics().density);
     }
 
@@ -455,14 +346,6 @@ public class MainActivity extends AppCompatActivity {
                 new android.graphics.drawable.GradientDrawable();
         g.setColor(color);
         g.setCornerRadius(0);
-        return g;
-    }
-
-    private android.graphics.drawable.GradientDrawable roundedBg(int color) {
-        android.graphics.drawable.GradientDrawable g =
-                new android.graphics.drawable.GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(0); // Metro：直角扁平
         return g;
     }
 }

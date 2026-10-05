@@ -1,13 +1,13 @@
 package com.courseschedule.app.ui;
 
 import android.animation.ValueAnimator;
+import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.SystemClock;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.util.AttributeSet;
@@ -15,6 +15,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.animation.OvershootInterpolator;
+import android.view.animation.DecelerateInterpolator;
 
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.ColorUtil;
@@ -32,15 +33,14 @@ import java.util.TreeMap;
  * 周课程表视图：统一行高网格，按时间行显示课程与非课程。
  * - 非课程项默认隐藏（行高为 0），课程紧凑排列
  * - 按住向下滑动：非课程行从 0 生长到指定高度，松手回弹收回
- * - 轻点课程触发详情回调；滑动与点击用系统阈值区分
+ * - 点击课程磁贴 3D 翻转显示背面详情；长按课程弹出编辑框
+ * - 按压磁贴点亮（盖半透明白层）；滑动/点击用系统阈值区分
  * - Win8 磁贴质感：每块色块覆盖一层均匀平面玻璃罩（无渐变无高光，完全平面）
  */
 public class TimetableView extends View {
 
     public interface Listener {
         void onCellClick(int day, int type, String refId, int startMin, int endMin);
-        /** 下拉展开非课程项开始时回调（用于隐藏详情面板等） */
-        void onPeekStart();
         /** 左右滑动切换课程表：direction=-1 上一个，+1 下一个 */
         void onSwipe(int direction);
     }
@@ -87,8 +87,33 @@ public class TimetableView extends View {
 
     private float downX, downY;
     private boolean moved;
-    private boolean peekNotified;
     private final int touchSlop;
+
+    // ---------- 长按编辑（翻转背面只翻回；修改需长按磁贴弹出编辑框） ----------
+    private static final long LONG_PRESS_MS = 500;
+    private Runnable longPressRunnable;
+    private boolean longPressed;
+    private int longPressDay;
+    private String longPressRefId;
+
+    // ---------- 磁贴按压点亮（Win8：按压时磁贴盖一层半透明白，像玻璃被照亮） ----------
+    private String pressedKey;      // 当前按下的磁贴（day|startMin|refId）
+    private float pressAlpha = 0f;  // 点亮强度 0~1（松手淡出）
+    private ValueAnimator pressAnimator;
+
+    // ---------- 磁贴翻转详情（Win8：点击磁贴翻转到背面显示课程详情） ----------
+    /** 翻转实例：支持多磁贴并行翻转（点击新磁贴时旧磁贴自动翻回） */
+    private static class FlipAnim {
+        String key;         // day|startMin|refId
+        final RectF rect = new RectF();
+        String time;        // 背面时间文本
+        float progress;     // 0~1
+        ValueAnimator anim;
+        boolean forward;    // true=翻向背面 false=翻回正面
+    }
+    private final List<FlipAnim> flips = new ArrayList<>();
+    private final android.graphics.Camera flipCamera = new android.graphics.Camera();
+    private final android.graphics.Matrix flipMatrix = new android.graphics.Matrix();
 
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
@@ -145,6 +170,7 @@ public class TimetableView extends View {
         rows.addAll(rowMap.values());
         cancelAnim();
         nonCourseReveal = 0f;
+        resetFlip(); // 数据刷新/切换课程表时复位翻转磁贴
         invalidate();
     }
 
@@ -292,17 +318,110 @@ public class TimetableView extends View {
                     float x = dayAreaX + idx * colW;
                     float yDraw = y + cellDropOffset(rowIdx, idx, visibleCount, days.size());
                     rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
+                    // 翻转中的磁贴：跳过常规绘制，循环结束后单独绘制（3D 翻转）
+                    String key = day + "|" + cell.startMin + "|" + cell.refId;
+                    if (isFlipping(key)) {
+                        continue;
+                    }
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
                     drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
                     drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
+                    // 按压点亮：磁贴原位盖半透明白层（Win8 按压发光，不变形）
+                    if (pressedKey != null && pressedKey.equals(key) && pressAlpha > 0f) {
+                        drawPressLight(canvas, rect);
+                    }
                 }
             }
             rowIdx++;
             y += rh;
         }
         if (!entranceRunning) canvas.drawLine(dayAreaX, y, w - pad, y, linePaint); // 底边线同动画期间隐藏
+        drawFlippedCell(canvas); // 翻转磁贴最后绘制（3D 翻转显示背面详情）
         if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
+    }
+
+    /** 按压点亮：磁贴整体盖一层半透明白（约30%），像玻璃被照亮，不改变形状 */
+    private void drawPressLight(Canvas canvas, RectF r) {
+        int a = (int) (0x4D * pressAlpha); // 0x4D ≈ 30%
+        if (a <= 0) return;
+        glassPaint.setShader(null);
+        glassPaint.setColor(0xFFFFFFFF);
+        glassPaint.setAlpha(a);
+        canvas.drawRect(r, glassPaint);
+    }
+
+    /** 翻转磁贴：Camera 绕 Y 轴翻转 180°，前半正面、后半背面（背面正读显示详情）；翻转全程带拿起放大→放下缩回 */
+    private void drawFlippedCell(Canvas canvas) {
+        if (flips.isEmpty()) return;
+        for (FlipAnim f : flips) {
+            if (f.progress <= 0.001f) continue;
+            String[] parts = f.key.split("\\|");
+            if (parts.length < 3) continue;
+            Course c = courseById.get(parts[2]);
+            if (c == null) continue;
+            RectF r = f.rect;
+            if (r.width() <= 0 || r.height() <= 0) continue;
+            float deg = f.progress * 180f;
+            float scale = flipScale(f.progress); // 拿起放大 → 放下缩回
+
+            canvas.save();
+            flipCamera.save();
+            if (deg <= 90f) {
+                flipCamera.rotateY(deg); // 正面：0→90
+            } else {
+                flipCamera.rotateY(deg - 180f); // 背面：-90→0，正读显示
+            }
+            flipCamera.getMatrix(flipMatrix);
+            flipMatrix.preTranslate(-r.centerX(), -r.centerY());
+            flipMatrix.postTranslate(r.centerX(), r.centerY());
+            canvas.concat(flipMatrix);
+            canvas.scale(scale, scale, r.centerX(), r.centerY()); // 拿起/放下
+
+            cellPaint.setColor(c.bgColor);
+            canvas.drawRect(r, cellPaint); // 直角扁平磁贴
+            drawTileGlass(canvas, r, 255); // 平面玻璃罩层
+
+            if (deg <= 90f) {
+                // 正面：课程名 + 教师
+                drawCellText(canvas, r, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
+            } else {
+                // 背面：课程名 + 老师一行 + 时间一行 + 长按编辑
+                drawFlipBack(canvas, r, c.name,
+                        c.teacher == null ? "" : c.teacher, f.time, c.textColor);
+            }
+            canvas.restore();
+            flipCamera.restore();
+        }
+    }
+
+    /** 翻转背面排版：课程名（可两行）+ 老师一行 + 时间一行 */
+    private void drawFlipBack(Canvas canvas, RectF r, String name, String teacher, String time, int color) {
+        float availH = r.height() * 0.62f;
+        String[] nameLines = name.length() >= 4
+                ? new String[]{name.substring(0, (name.length() + 1) / 2), name.substring((name.length() + 1) / 2)}
+                : new String[]{name};
+        float fs = Math.min(nameBaseSize * 0.92f, availH / (nameLines.length * 1.18f));
+        namePaint.setColor(color);
+        namePaint.setTextSize(fs);
+        float lineH = fs * 1.18f;
+        float y = r.top + (availH - nameLines.length * lineH) / 2f + fs * 0.36f;
+        for (String ln : nameLines) {
+            canvas.drawText(ln, r.centerX(), y, namePaint);
+            y += lineH;
+        }
+        // 信息区：老师一行、时间一行（分行避免长文本超出格子宽度）
+        float infoY = r.top + availH + subBaseSize * 1.15f;
+        subPaint.setColor(adjustAlpha(color, 235));
+        subPaint.setTextSize(subBaseSize * 0.9f);
+        boolean hasTeacher = teacher != null && !teacher.isEmpty();
+        if (hasTeacher) {
+            canvas.drawText(teacher, r.centerX(), infoY, subPaint);
+            infoY += subBaseSize * 1.2f;
+        }
+        canvas.drawText(time, r.centerX(), infoY, subPaint);
+        namePaint.setTextSize(nameBaseSize);
+        subPaint.setTextSize(subBaseSize);
     }
 
     /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉，Overshoot 回弹 */
@@ -403,8 +522,10 @@ public class TimetableView extends View {
                 downX = event.getX();
                 downY = event.getY();
                 moved = false;
-                peekNotified = false;
+                longPressed = false;
                 cancelAnim();
+                pressDown(event.getX(), event.getY());
+                scheduleLongPress(event.getX(), event.getY());
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (!moved) {
@@ -412,13 +533,12 @@ public class TimetableView extends View {
                     float dy = event.getY() - downY;
                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                         moved = true;
+                        cancelLongPressTimer();
+                        pressRelease(true); // 转为滑动/下拉，取消按压
+                        resetFlip();        // 布局将变化，同时复位翻转磁贴
                     }
                 }
                 if (moved) {
-                    if (!peekNotified && listener != null) {
-                        peekNotified = true;
-                        listener.onPeekStart();
-                    }
                     // 下拉展开非课程项（0~1），跟随手指
                     float dy = event.getY() - downY;
                     nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
@@ -427,6 +547,7 @@ public class TimetableView extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                cancelLongPressTimer();
                 if (moved) {
                     // 横向滑动切换课程表
                     float dx = event.getX() - downX;
@@ -438,12 +559,104 @@ public class TimetableView extends View {
                     }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);
-                } else if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
-                    handleTap(event.getX(), event.getY());
+                } else if (longPressed) {
+                    // 长按已弹出编辑框：本次抬起不再触发点击/翻转
+                    pressRelease(true);
+                } else {
+                    pressRelease(false); // 点击：磁贴回弹动画
+                    if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
+                        handleTap(event.getX(), event.getY());
+                    }
                 }
                 break;
         }
         return true;
+    }
+
+    /** 长按课程磁贴：500ms 后弹出编辑框（不触发翻转） */
+    private void scheduleLongPress(float x, float y) {
+        String k = hitTest(x, y);
+        if (k == null) return;
+        String[] parts = k.split("\\|");
+        if (parts.length < 3) return;
+        longPressDay = Integer.parseInt(parts[0]);
+        longPressRefId = parts[2];
+        longPressRunnable = () -> {
+            if (moved) return;
+            longPressed = true;
+            pressRelease(true);
+            if (listener != null) listener.onCellClick(longPressDay, TimetableEngine.TYPE_COURSE, longPressRefId, 0, 0);
+        };
+        postDelayed(longPressRunnable, LONG_PRESS_MS);
+    }
+
+    private void cancelLongPressTimer() {
+        if (longPressRunnable != null) {
+            removeCallbacks(longPressRunnable);
+            longPressRunnable = null;
+        }
+    }
+
+    /** 按下：命中课程磁贴则点亮（盖半透明白层），不改变磁贴形状 */
+    private void pressDown(float x, float y) {
+        pressRelease(true);
+        String key = hitTest(x, y);
+        if (key == null) return;
+        pressedKey = key;
+        pressAlpha = 1f;
+        invalidate();
+    }
+
+    /** 松手/取消：点亮淡出（immediate=true 直接熄灭，如转为滑动） */
+    private void pressRelease(boolean immediate) {
+        if (pressedKey == null && pressAlpha <= 0f) return;
+        if (immediate) {
+            pressedKey = null;
+            pressAlpha = 0f;
+            invalidate();
+            return;
+        }
+        if (pressAnimator != null) pressAnimator.cancel();
+        float from = pressAlpha;
+        pressAnimator = ValueAnimator.ofFloat(from, 0f);
+        pressAnimator.setDuration(140);
+        pressAnimator.setInterpolator(new DecelerateInterpolator(2.0f));
+        pressAnimator.addUpdateListener(a -> {
+            pressAlpha = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        pressAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                pressedKey = null;
+                pressAlpha = 0f;
+                invalidate();
+            }
+        });
+        pressAnimator.start();
+    }
+
+    /** 命中检测：返回课程磁贴 key；非课程带/空白返回 null */
+    private String hitTest(float x, float y) {
+        float dayAreaX = timeAxisW + pad;
+        float w = getWidth();
+        if (w <= 0 || days.isEmpty() || colW <= 0 || rows.isEmpty()) return null;
+        if (y < headerH + pad) return null;
+        float acc = headerH + pad;
+        for (Row row : rows) {
+            float rh = isBandRow(row) ? bandH : rowH;
+            if (rh <= 0) { continue; }
+            if (y >= acc && y < acc + rh) {
+                int col = (int) ((x - dayAreaX) / colW);
+                if (col < 0 || col >= days.size()) return null;
+                int day = days.get(col);
+                RenderedCell cell = row.dayCells.get(day);
+                if (cell == null || cell.type == TimetableEngine.TYPE_NONCOURSE) return null;
+                return day + "|" + cell.startMin + "|" + cell.refId;
+            }
+            acc += rh;
+        }
+        return null;
     }
 
     private void handleTap(float x, float y) {
@@ -457,9 +670,109 @@ public class TimetableView extends View {
         if (col < 0 || col >= days.size()) return;
         int day = days.get(col);
         RenderedCell cell = row.dayCells.get(day);
-        if (cell != null) {
+        if (cell == null) return;
+        if (cell.type == TimetableEngine.TYPE_NONCOURSE) {
+            // 非课程带：保持原逻辑（弹出编辑）
             listener.onCellClick(day, cell.type, cell.refId, cell.startMin, cell.endMin);
+            return;
         }
+        String key = day + "|" + cell.startMin + "|" + cell.refId;
+        FlipAnim f = findFlip(key);
+        if (f != null && f.forward && f.progress >= 1f) {
+            // 已翻转到背面：点击只翻回正面（修改请长按磁贴）
+            flipBack(key);
+            return;
+        }
+        // 点击新磁贴：之前已完成翻转的磁贴自动翻回（带动画）
+        for (FlipAnim other : new ArrayList<>(flips)) {
+            if (other.forward && other.progress >= 1f) flipBack(other.key);
+        }
+        // 课程磁贴：翻转到背面显示详情（拿起放大 → 翻转 → 放下缩回）
+        pressRelease(true);
+        startFlip(key, cell, day);
+    }
+
+    /** 开始翻转指定磁贴（400ms：先放大拿起，翻转 180°，再缩小放下） */
+    private void startFlip(String key, RenderedCell cell, int day) {
+        RectF r = new RectF();
+        float acc = headerH + pad;
+        float dayAreaX = timeAxisW + pad;
+        for (Row row : rows) {
+            float rh = isBandRow(row) ? bandH : rowH;
+            if (rh <= 0) { acc += rh; continue; }
+            for (int idx = 0; idx < days.size(); idx++) {
+                int d = days.get(idx);
+                RenderedCell c = row.dayCells.get(d);
+                if (c == null) continue;
+                if (d == day && c.startMin == cell.startMin && c.refId.equals(cell.refId)) {
+                    float x = dayAreaX + idx * colW;
+                    r.set(x + 2, acc + 1, x + colW - 2, acc + rh - 1);
+                }
+            }
+            acc += rh;
+        }
+        FlipAnim f = new FlipAnim();
+        f.key = key;
+        f.rect.set(r);
+        f.time = fmt(cell.startMin) + "-" + fmt(cell.endMin);
+        f.forward = true;
+        f.progress = 0f;
+        f.anim = ValueAnimator.ofFloat(0f, 1f);
+        f.anim.setDuration(400);
+        f.anim.setInterpolator(new DecelerateInterpolator(2.0f));
+        f.anim.addUpdateListener(a -> {
+            f.progress = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        flips.add(f);
+        f.anim.start();
+    }
+
+    /** 翻回正面（从背面，带动画） */
+    private void flipBack(String key) {
+        FlipAnim f = findFlip(key);
+        if (f == null) return;
+        if (f.anim != null) f.anim.cancel();
+        f.forward = false;
+        float from = f.progress;
+        f.anim = ValueAnimator.ofFloat(from, 0f);
+        f.anim.setDuration(400);
+        f.anim.setInterpolator(new DecelerateInterpolator(2.0f));
+        f.anim.addUpdateListener(a -> {
+            f.progress = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        f.anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                flips.remove(f);
+                invalidate();
+            }
+        });
+        f.anim.start();
+    }
+
+    private FlipAnim findFlip(String key) {
+        for (FlipAnim f : flips) if (f.key.equals(key)) return f;
+        return null;
+    }
+
+    private boolean isFlipping(String key) {
+        FlipAnim f = findFlip(key);
+        return f != null && f.progress > 0.001f;
+    }
+
+    /** 复位翻转状态（数据刷新/滑动/下拉时） */
+    private void resetFlip() {
+        for (FlipAnim f : flips) if (f.anim != null) f.anim.cancel();
+        flips.clear();
+    }
+
+    /** 翻转缩放曲线：0~12% 拿起放大(1→1.18)，12%~85% 保持，85%~100% 放下缩回(1.18→1) */
+    private float flipScale(float p) {
+        if (p <= 0.12f) return 1f + 0.18f * (p / 0.12f);
+        if (p >= 0.85f) return 1.18f - 0.18f * ((p - 0.85f) / 0.15f);
+        return 1.18f;
     }
 
     private int adjustAlpha(int color, int alpha) {

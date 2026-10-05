@@ -4,7 +4,6 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -33,7 +32,7 @@ import java.util.TreeMap;
  * - 非课程项默认隐藏（行高为 0），课程紧凑排列
  * - 按住向下滑动：非课程行从 0 生长到指定高度，松手回弹收回
  * - 轻点课程触发详情回调；滑动与点击用系统阈值区分
- * - Win8 磁贴质感：每块色块自带一道顶部玻璃光泽（单块玻璃感，无整板覆盖）
+ * - Win8 磁贴质感：每块色块覆盖一层均匀平面玻璃罩（无渐变无高光，完全平面）
  */
 public class TimetableView extends View {
 
@@ -64,13 +63,11 @@ public class TimetableView extends View {
     private final Paint cellPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint glassEdgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint namePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint subPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint dayPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
-    private final RectF glassRect = new RectF();
 
     private Map<String, Course> courseById = new LinkedHashMap<>();
 
@@ -251,7 +248,7 @@ public class TimetableView extends View {
                 cellPaint.setColor(adjustAlpha(ColorUtil.NONCOURSE_BG, bandAlpha));
                 canvas.drawRect(rect, cellPaint); // Metro：直角扁平块
                 if (rh >= dp(14) && fade > 0.05f) {
-                    drawTileGlass(canvas, rect, bandAlpha); // Win8 磁贴单块玻璃光泽
+                    drawTileGlass(canvas, rect, bandAlpha); // 平面玻璃罩层
                     drawCellText(canvas, rect, cellName(bandCell), "",
                             adjustAlpha(ColorUtil.NONCOURSE_TEXT, (int) (255 * fade)), true);
                 }
@@ -266,7 +263,7 @@ public class TimetableView extends View {
                     rect.set(x + 2, y + 1, x + colW - 2, y + rh - 1);
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
-                    drawTileGlass(canvas, rect, 255); // Win8 磁贴单块玻璃光泽
+                    drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
                     drawCellText(canvas, rect, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
                 }
             }
@@ -275,23 +272,14 @@ public class TimetableView extends View {
         canvas.drawLine(dayAreaX, y, w - pad, y, linePaint);
     }
 
-    /** Win8 磁贴单块玻璃质感：色块顶部一道玻璃反光渐变 + 上缘高光线，直角扁平、无阴影 */
+    /** 平面玻璃罩层：整块色块被一层均匀的极淡白玻璃覆盖，无渐变、无高光、无边缘线，保持完全平面 */
     private void drawTileGlass(Canvas canvas, RectF r, int alpha) {
         if (r.height() <= 0 || alpha <= 0) return;
-        float d = getResources().getDisplayMetrics().density;
-        float glossH = r.height() * 0.30f; // 反光覆盖顶部约 1/3
-        int edgeA = (int) (0x40 * alpha / 255f);
-        glassRect.set(r.left, r.top, r.right, r.top + glossH);
-        glassPaint.setShader(new LinearGradient(0, r.top, 0, r.top + glossH,
-                new int[]{0x30FFFFFF, 0x12FFFFFF, 0x00FFFFFF},
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        glassPaint.setAlpha(alpha);
-        canvas.drawRect(glassRect, glassPaint);
+        int veil = (int) (0x10 * alpha / 255f); // 均匀白罩 ≈6%
         glassPaint.setShader(null);
-        // 上缘高光线（随 alpha 同步淡出）
-        glassEdgePaint.setColor((edgeA << 24) | 0x00FFFFFF);
-        glassEdgePaint.setStrokeWidth(1f * d);
-        canvas.drawLine(r.left, r.top, r.right, r.top, glassEdgePaint);
+        glassPaint.setColor(0xFFFFFFFF);
+        glassPaint.setAlpha(veil);
+        canvas.drawRect(r, glassPaint);
     }
 
     private void drawHeader(Canvas canvas, float dayAreaX) {
@@ -302,7 +290,7 @@ public class TimetableView extends View {
             boolean today = isToday(day);
             cellPaint.setColor(today ? 0xFF0078D7 : 0xFFE5F1FB);
             canvas.drawRect(rect, cellPaint); // Metro：直角扁平标题块
-            drawTileGlass(canvas, rect, 255); // 磁贴单块玻璃光泽
+            drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
             dayPaint.setColor(today ? Color.WHITE : 0xFF1A1A1A);
             canvas.drawText(DAY_NAMES[day - 1], rect.centerX(), rect.centerY() + dayPaint.getTextSize() * 0.36f, dayPaint);
         }

@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
 
         // 底部提示
         TextView footer = new TextView(this);
-        footer.setText("点击课程翻转查看详情 · 按住下拉查看非课程项 · 左右滑动切换课程表");
+        footer.setText("点击课程翻转查看详情 · 长按课程修改 · 按住下拉查看非课程项 · 左右滑动切换课程表");
         footer.setTextColor(0xFF666666);
         footer.setTextSize(12);
         footer.setGravity(Gravity.CENTER);

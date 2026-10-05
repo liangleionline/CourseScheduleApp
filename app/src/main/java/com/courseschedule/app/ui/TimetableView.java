@@ -92,6 +92,13 @@ public class TimetableView extends View {
     private boolean peekNotified;
     private final int touchSlop;
 
+    // ---------- 长按编辑（翻转背面只翻回；修改需长按磁贴弹出编辑框） ----------
+    private static final long LONG_PRESS_MS = 500;
+    private Runnable longPressRunnable;
+    private boolean longPressed;
+    private int longPressDay;
+    private String longPressRefId;
+
     // ---------- 磁贴按压点亮（Win8：按压时磁贴盖一层半透明白，像玻璃被照亮） ----------
     private String pressedKey;      // 当前按下的磁贴（day|startMin|refId）
     private float pressAlpha = 0f;  // 点亮强度 0~1（松手淡出）
@@ -382,17 +389,17 @@ public class TimetableView extends View {
                 // 正面：课程名 + 教师
                 drawCellText(canvas, r, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
             } else {
-                // 背面：课程名 + 教师·时间 + 点击编辑
-                String meta = (c.teacher != null && !c.teacher.isEmpty() ? c.teacher + " · " : "") + f.time;
-                drawFlipBack(canvas, r, c.name, meta, c.textColor);
+                // 背面：课程名 + 老师一行 + 时间一行 + 长按编辑
+                drawFlipBack(canvas, r, c.name,
+                        c.teacher == null ? "" : c.teacher, f.time, c.textColor);
             }
             canvas.restore();
             flipCamera.restore();
         }
     }
 
-    /** 翻转背面排版：课程名（可两行） + 教师·时间 + 底部"点击编辑" */
-    private void drawFlipBack(Canvas canvas, RectF r, String name, String meta, int color) {
+    /** 翻转背面排版：课程名（可两行）+ 老师一行 + 时间一行 + 底部"长按编辑" */
+    private void drawFlipBack(Canvas canvas, RectF r, String name, String teacher, String time, int color) {
         float availH = r.height() * 0.62f;
         String[] nameLines = name.length() >= 4
                 ? new String[]{name.substring(0, (name.length() + 1) / 2), name.substring((name.length() + 1) / 2)}
@@ -406,12 +413,19 @@ public class TimetableView extends View {
             canvas.drawText(ln, r.centerX(), y, namePaint);
             y += lineH;
         }
+        // 信息区：老师一行、时间一行（分行避免长文本超出格子宽度）
+        float infoY = r.top + availH + subBaseSize * 1.15f;
         subPaint.setColor(adjustAlpha(color, 235));
-        subPaint.setTextSize(subBaseSize * 0.95f);
-        canvas.drawText(meta, r.centerX(), r.top + availH + subBaseSize * 1.35f, subPaint);
+        subPaint.setTextSize(subBaseSize * 0.9f);
+        boolean hasTeacher = teacher != null && !teacher.isEmpty();
+        if (hasTeacher) {
+            canvas.drawText(teacher, r.centerX(), infoY, subPaint);
+            infoY += subBaseSize * 1.2f;
+        }
+        canvas.drawText(time, r.centerX(), infoY, subPaint);
         subPaint.setTextSize(subBaseSize * 0.78f);
         subPaint.setColor(adjustAlpha(color, 175));
-        canvas.drawText("点击编辑", r.centerX(), r.bottom - subBaseSize * 0.9f, subPaint);
+        canvas.drawText("长按编辑", r.centerX(), r.bottom - subBaseSize * 0.9f, subPaint);
         namePaint.setTextSize(nameBaseSize);
         subPaint.setTextSize(subBaseSize);
     }
@@ -515,8 +529,10 @@ public class TimetableView extends View {
                 downY = event.getY();
                 moved = false;
                 peekNotified = false;
+                longPressed = false;
                 cancelAnim();
                 pressDown(event.getX(), event.getY());
+                scheduleLongPress(event.getX(), event.getY());
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (!moved) {
@@ -524,6 +540,7 @@ public class TimetableView extends View {
                     float dy = event.getY() - downY;
                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                         moved = true;
+                        cancelLongPress();
                         pressRelease(true); // 转为滑动/下拉，取消按压
                         resetFlip();        // 布局将变化，同时复位翻转磁贴
                     }
@@ -541,6 +558,7 @@ public class TimetableView extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                cancelLongPress();
                 if (moved) {
                     // 横向滑动切换课程表
                     float dx = event.getX() - downX;
@@ -552,6 +570,9 @@ public class TimetableView extends View {
                     }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);
+                } else if (longPressed) {
+                    // 长按已弹出编辑框：本次抬起不再触发点击/翻转
+                    pressRelease(true);
                 } else {
                     pressRelease(false); // 点击：磁贴回弹动画
                     if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
@@ -561,6 +582,30 @@ public class TimetableView extends View {
                 break;
         }
         return true;
+    }
+
+    /** 长按课程磁贴：500ms 后弹出编辑框（不触发翻转） */
+    private void scheduleLongPress(float x, float y) {
+        String k = hitTest(x, y);
+        if (k == null) return;
+        String[] parts = k.split("\\|");
+        if (parts.length < 3) return;
+        longPressDay = Integer.parseInt(parts[0]);
+        longPressRefId = parts[2];
+        longPressRunnable = () -> {
+            if (moved) return;
+            longPressed = true;
+            pressRelease(true);
+            if (listener != null) listener.onCellClick(longPressDay, TimetableEngine.TYPE_COURSE, longPressRefId, 0, 0);
+        };
+        postDelayed(longPressRunnable, LONG_PRESS_MS);
+    }
+
+    private void cancelLongPress() {
+        if (longPressRunnable != null) {
+            removeCallbacks(longPressRunnable);
+            longPressRunnable = null;
+        }
     }
 
     /** 按下：命中课程磁贴则点亮（盖半透明白层），不改变磁贴形状 */
@@ -645,9 +690,8 @@ public class TimetableView extends View {
         String key = day + "|" + cell.startMin + "|" + cell.refId;
         FlipAnim f = findFlip(key);
         if (f != null && f.forward && f.progress >= 1f) {
-            // 已翻转到背面：翻回并弹出编辑
+            // 已翻转到背面：点击只翻回正面（修改请长按磁贴）
             flipBack(key);
-            listener.onCellClick(day, cell.type, cell.refId, cell.startMin, cell.endMin);
             return;
         }
         // 点击新磁贴：之前已完成翻转的磁贴自动翻回（带动画）

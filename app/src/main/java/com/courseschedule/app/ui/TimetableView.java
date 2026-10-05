@@ -145,7 +145,12 @@ public class TimetableView extends View {
         rows.addAll(rowMap.values());
         cancelAnim();
         nonCourseReveal = 0f;
-        entranceStart = -1L; // 数据刷新后重新触发磁贴入场动画
+        invalidate();
+    }
+
+    /** 手动触发磁贴入场动画（如课程表切换滑入完成后调用） */
+    public void playEntrance() {
+        entranceStart = -1L;
         invalidate();
     }
 

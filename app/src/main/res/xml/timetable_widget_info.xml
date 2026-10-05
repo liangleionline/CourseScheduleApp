@@ -7,6 +7,7 @@
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_timetable"
     android:previewImage="@drawable/widget_bg"
+    android:previewLayout="@layout/widget_preview"
     android:configure="com.courseschedule.app.widget.WidgetConfigureActivity"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"

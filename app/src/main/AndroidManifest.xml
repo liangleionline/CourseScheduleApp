@@ -27,7 +27,7 @@
 
         <receiver
             android:name=".widget.TimetableWidgetProvider"
-            android:exported="false"
+            android:exported="true"
             android:label="课程表小组件">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

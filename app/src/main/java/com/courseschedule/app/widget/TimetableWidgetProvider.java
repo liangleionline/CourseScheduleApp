@@ -213,9 +213,6 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
         String timeText = fmt(cell.startMin) + "-" + fmt(cell.endMin);
         itemRv.setTextViewText(R.id.tv_course_time, timeText);
 
-        // 无教室地点 → 隐藏位置行
-        itemRv.setViewVisibility(R.id.tv_course_position, View.GONE);
-
         // 教师：为空则隐藏
         String teacher = course != null && course.teacher != null ? course.teacher : "";
         if (teacher.isBlank()) {

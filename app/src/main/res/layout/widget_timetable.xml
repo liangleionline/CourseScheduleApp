@@ -38,7 +38,7 @@
                     android:layout_height="match_parent"
                     android:orientation="vertical">
 
-                    <!-- 今日头部（日期 + 周数 + 尾部提示） -->
+                    <!-- 今日头部（日期 + 周几 + 尾部提示） -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -55,7 +55,7 @@
                             android:textColor="@color/widget_text_secondary"
                             android:textSize="10dp"
                             android:textStyle="bold"
-                            tools:text="今日 10.05 周一 第6周" />
+                            tools:text="今天 10.05 周一" />
 
                         <TextView
                             android:id="@+id/tv_today_footer"
@@ -117,7 +117,7 @@
                     android:layout_height="match_parent"
                     android:orientation="vertical">
 
-                    <!-- 明日头部（日期 + 周数 + 尾部提示） -->
+                    <!-- 明日头部（日期 + 周几 + 尾部提示） -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -134,7 +134,7 @@
                             android:textColor="@color/widget_text_secondary"
                             android:textSize="10dp"
                             android:textStyle="bold"
-                            tools:text="明日 10.06 周二 第6周" />
+                            tools:text="明天 10.06 周二" />
 
                         <TextView
                             android:id="@+id/tv_tomorrow_footer"

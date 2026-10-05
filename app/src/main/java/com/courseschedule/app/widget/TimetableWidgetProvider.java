@@ -157,9 +157,9 @@ public class TimetableWidgetProvider extends AppWidgetProvider {
                                      int emptyContainerId, int emptyTextId,
                                      Calendar date, List<RenderedCell> displayCourses,
                                      int currentWeek, boolean isToday, AppData data) {
-        // 1. 标题拼接
+        // 1. 标题拼接（周几用周一=1索引，避免 Calendar.DAY_OF_WEEK 周日=1 错位）
         String prefix = isToday ? "今天" : "明天";
-        String dayOfWeekStr = WEEK_DAYS[date.get(Calendar.DAY_OF_WEEK) - 1];
+        String dayOfWeekStr = WEEK_DAYS[todayDow(date) - 1];
         int displayWeek = currentWeek;
         if (!isToday && todayDow(date) == 1) displayWeek = currentWeek + 1;
         String titleText = prefix + " " + fmtDate(date) + " " + dayOfWeekStr + " 第" + displayWeek + "周";

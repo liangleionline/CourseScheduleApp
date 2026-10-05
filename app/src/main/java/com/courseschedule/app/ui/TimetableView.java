@@ -1,6 +1,7 @@
 package com.courseschedule.app.ui;
 
 import android.animation.ValueAnimator;
+import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -15,6 +16,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.animation.OvershootInterpolator;
+import android.view.animation.DecelerateInterpolator;
 
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.ColorUtil;
@@ -89,6 +91,16 @@ public class TimetableView extends View {
     private boolean moved;
     private boolean peekNotified;
     private final int touchSlop;
+
+    // ---------- 磁贴按压效果（Win8：按在磁贴不同位置，翻起方向不同） ----------
+    /** 按压区域：0=中心 1=上 2=右 3=下 4=左 5=右上 6=左上 7=右下 8=左下 */
+    private static final int PRESS_C = 0, PRESS_N = 1, PRESS_E = 2, PRESS_S = 3,
+            PRESS_W = 4, PRESS_NE = 5, PRESS_NW = 6, PRESS_SE = 7, PRESS_SW = 8;
+    private String pressedKey;      // 当前按下的磁贴（day|startMin|refId）
+    private int pressRegion = PRESS_C;
+    private float pressScale = 1f;  // 当前按压缩放（1=无）
+    private ValueAnimator pressAnimator;
+    private final RectF pressedRect = new RectF();
 
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
@@ -292,6 +304,11 @@ public class TimetableView extends View {
                     float x = dayAreaX + idx * colW;
                     float yDraw = y + cellDropOffset(rowIdx, idx, visibleCount, days.size());
                     rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
+                    // 按压中的磁贴：跳过常规绘制，循环结束后单独放大绘制（盖在其余磁贴之上）
+                    if (pressedKey != null
+                            && pressedKey.equals(day + "|" + cell.startMin + "|" + cell.refId)) {
+                        continue;
+                    }
                     cellPaint.setColor(c.bgColor);
                     canvas.drawRect(rect, cellPaint); // Metro：直角扁平磁贴
                     drawTileGlass(canvas, rect, 255); // 平面玻璃罩层
@@ -302,7 +319,40 @@ public class TimetableView extends View {
             y += rh;
         }
         if (!entranceRunning) canvas.drawLine(dayAreaX, y, w - pad, y, linePaint); // 底边线同动画期间隐藏
+        drawPressedCell(canvas); // 按压磁贴最后绘制，盖在其余内容之上
         if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
+    }
+
+    /** 按压磁贴：按按压区域以对侧为锚点放大 + 轻微旋转（Win8 磁贴按压效果，2D 近似） */
+    private void drawPressedCell(Canvas canvas) {
+        if (pressedKey == null || pressScale <= 1.001f) return;
+        String[] parts = pressedKey.split("\\|");
+        if (parts.length < 3) return;
+        Course c = courseById.get(parts[2]);
+        if (c == null) return;
+        RectF r = pressedRect;
+        float scale = pressScale;
+        float cx = r.centerX(), cy = r.centerY();
+        float pivotX, pivotY, rot, sx, sy;
+        switch (pressRegion) {
+            case PRESS_N: pivotX = cx; pivotY = r.bottom; rot = 0; sx = 1f; sy = scale; break;
+            case PRESS_S: pivotX = cx; pivotY = r.top; rot = 0; sx = 1f; sy = scale; break;
+            case PRESS_W: pivotX = r.right; pivotY = cy; rot = 0; sx = scale; sy = 1f; break;
+            case PRESS_E: pivotX = r.left; pivotY = cy; rot = 0; sx = scale; sy = 1f; break;
+            case PRESS_NE: pivotX = r.left; pivotY = r.bottom; rot = -2f; sx = scale; sy = scale; break;
+            case PRESS_NW: pivotX = r.right; pivotY = r.bottom; rot = 2f; sx = scale; sy = scale; break;
+            case PRESS_SE: pivotX = r.left; pivotY = r.top; rot = 2f; sx = scale; sy = scale; break;
+            case PRESS_SW: pivotX = r.right; pivotY = r.top; rot = -2f; sx = scale; sy = scale; break;
+            default: pivotX = cx; pivotY = cy; rot = 0; sx = scale; sy = scale; break;
+        }
+        canvas.save();
+        canvas.rotate(rot, pivotX, pivotY);
+        canvas.scale(sx, sy, pivotX, pivotY);
+        cellPaint.setColor(c.bgColor);
+        canvas.drawRect(r, cellPaint); // 直角扁平磁贴（随 canvas 变换放大）
+        drawTileGlass(canvas, r, 255); // 平面玻璃罩层
+        drawCellText(canvas, r, c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
+        canvas.restore();
     }
 
     /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉，Overshoot 回弹 */
@@ -405,6 +455,7 @@ public class TimetableView extends View {
                 moved = false;
                 peekNotified = false;
                 cancelAnim();
+                pressDown(event.getX(), event.getY());
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (!moved) {
@@ -412,6 +463,7 @@ public class TimetableView extends View {
                     float dy = event.getY() - downY;
                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                         moved = true;
+                        pressRelease(true); // 转为滑动/下拉，取消按压
                     }
                 }
                 if (moved) {
@@ -438,12 +490,109 @@ public class TimetableView extends View {
                     }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);
-                } else if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
-                    handleTap(event.getX(), event.getY());
+                } else {
+                    pressRelease(false); // 点击：磁贴回弹动画
+                    if (listener != null && data != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
+                        handleTap(event.getX(), event.getY());
+                    }
                 }
                 break;
         }
         return true;
+    }
+
+    /** 按下：命中磁贴则按位置记录按压态（中心/四边/四角），立即放大变形 */
+    private void pressDown(float x, float y) {
+        pressRelease(true);
+        PressHit hit = hitTest(x, y);
+        if (hit == null) return;
+        pressedKey = hit.key;
+        pressedRect.set(hit.rect);
+        pressRegion = regionOf(hit.rect, x, y);
+        pressScale = targetPressScale(pressRegion);
+        invalidate();
+    }
+
+    /** 松手/取消：回弹动画（immediate=true 时直接复位，如转为滑动） */
+    private void pressRelease(boolean immediate) {
+        if (pressedKey == null) return;
+        if (immediate) {
+            pressScale = 1f;
+            pressedKey = null;
+            invalidate();
+            return;
+        }
+        if (pressAnimator != null) pressAnimator.cancel();
+        float from = pressScale;
+        pressAnimator = ValueAnimator.ofFloat(from, 1f);
+        pressAnimator.setDuration(160);
+        pressAnimator.setInterpolator(new DecelerateInterpolator(2.2f));
+        pressAnimator.addUpdateListener(a -> {
+            pressScale = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        pressAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                pressedKey = null;
+                invalidate();
+            }
+        });
+        pressAnimator.start();
+    }
+
+    /** 命中检测：返回磁贴 key、矩形与按下坐标；非课程带/空白返回 null */
+    private PressHit hitTest(float x, float y) {
+        float dayAreaX = timeAxisW + pad;
+        float w = getWidth();
+        if (w <= 0 || days.isEmpty() || colW <= 0 || rows.isEmpty()) return null;
+        if (y < headerH + pad) return null;
+        float acc = headerH + pad;
+        for (Row row : rows) {
+            float rh = isBandRow(row) ? bandH : rowH;
+            if (rh <= 0) { continue; }
+            if (y >= acc && y < acc + rh) {
+                int col = (int) ((x - dayAreaX) / colW);
+                if (col < 0 || col >= days.size()) return null;
+                int day = days.get(col);
+                RenderedCell cell = row.dayCells.get(day);
+                if (cell == null || cell.type == TimetableEngine.TYPE_NONCOURSE) return null;
+                float gx = dayAreaX + col * colW;
+                PressHit h = new PressHit();
+                h.key = day + "|" + cell.startMin + "|" + cell.refId;
+                h.rect.set(gx + 2, acc + 1, gx + colW - 2, acc + rh - 1);
+                return h;
+            }
+            acc += rh;
+        }
+        return null;
+    }
+
+    /** 9 宫格区域：x<1/4 左、x>3/4 右，y<1/4 上、y>3/4 下 */
+    private int regionOf(RectF r, float x, float y) {
+        int hz = x < r.left + r.width() * 0.25f ? 1 : (x > r.right - r.width() * 0.25f ? 2 : 0);
+        int vt = y < r.top + r.height() * 0.25f ? 1 : (y > r.bottom - r.height() * 0.25f ? 2 : 0);
+        // 水平：1=左 2=右 0=中；垂直：1=上 2=下 0=中
+        if (vt == 0 && hz == 0) return PRESS_C;
+        if (vt == 1 && hz == 0) return PRESS_N;
+        if (vt == 2 && hz == 0) return PRESS_S;
+        if (vt == 0 && hz == 1) return PRESS_W;
+        if (vt == 0 && hz == 2) return PRESS_E;
+        if (vt == 1 && hz == 2) return PRESS_NE;
+        if (vt == 1 && hz == 1) return PRESS_NW;
+        if (vt == 2 && hz == 2) return PRESS_SE;
+        return PRESS_SW;
+    }
+
+    /** 目标缩放（对齐 Win8 磁贴按压缩放：中心 1.92、边 2.0、角 2.04） */
+    private float targetPressScale(int region) {
+        return region == PRESS_C ? 1.92f : (region == PRESS_NE || region == PRESS_NW
+                || region == PRESS_SE || region == PRESS_SW ? 2.04f : 2.0f);
+    }
+
+    private static class PressHit {
+        String key;
+        final RectF rect = new RectF();
     }
 
     private void handleTap(float x, float y) {

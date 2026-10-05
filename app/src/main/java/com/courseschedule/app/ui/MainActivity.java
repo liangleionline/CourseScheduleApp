@@ -14,7 +14,6 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.courseschedule.app.R;
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.Course;
 import com.courseschedule.app.data.NonCourseItem;
@@ -83,12 +82,8 @@ public class MainActivity extends AppCompatActivity {
         timetable.setListener(new TimetableView.Listener() {
             @Override
             public void onCellClick(int day, int type, String refId, int startMin, int endMin) {
-                // 课程：翻转背面点击 → 编辑；非课程：直接编辑
+                // 课程：长按触发 → 编辑；非课程：直接编辑
                 MainActivity.this.onCellClick(day, type, refId);
-            }
-
-            @Override
-            public void onPeekStart() {
             }
 
             @Override

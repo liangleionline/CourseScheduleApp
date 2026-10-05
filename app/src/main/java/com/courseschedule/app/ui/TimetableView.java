@@ -8,7 +8,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.SystemClock;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.util.AttributeSet;
@@ -34,15 +33,14 @@ import java.util.TreeMap;
  * 周课程表视图：统一行高网格，按时间行显示课程与非课程。
  * - 非课程项默认隐藏（行高为 0），课程紧凑排列
  * - 按住向下滑动：非课程行从 0 生长到指定高度，松手回弹收回
- * - 轻点课程触发详情回调；滑动与点击用系统阈值区分
+ * - 点击课程磁贴 3D 翻转显示背面详情；长按课程弹出编辑框
+ * - 按压磁贴点亮（盖半透明白层）；滑动/点击用系统阈值区分
  * - Win8 磁贴质感：每块色块覆盖一层均匀平面玻璃罩（无渐变无高光，完全平面）
  */
 public class TimetableView extends View {
 
     public interface Listener {
         void onCellClick(int day, int type, String refId, int startMin, int endMin);
-        /** 下拉展开非课程项开始时回调（用于隐藏详情面板等） */
-        void onPeekStart();
         /** 左右滑动切换课程表：direction=-1 上一个，+1 下一个 */
         void onSwipe(int direction);
     }
@@ -89,7 +87,6 @@ public class TimetableView extends View {
 
     private float downX, downY;
     private boolean moved;
-    private boolean peekNotified;
     private final int touchSlop;
 
     // ---------- 长按编辑（翻转背面只翻回；修改需长按磁贴弹出编辑框） ----------
@@ -525,7 +522,6 @@ public class TimetableView extends View {
                 downX = event.getX();
                 downY = event.getY();
                 moved = false;
-                peekNotified = false;
                 longPressed = false;
                 cancelAnim();
                 pressDown(event.getX(), event.getY());
@@ -543,10 +539,6 @@ public class TimetableView extends View {
                     }
                 }
                 if (moved) {
-                    if (!peekNotified && listener != null) {
-                        peekNotified = true;
-                        listener.onPeekStart();
-                    }
                     // 下拉展开非课程项（0~1），跟随手指
                     float dy = event.getY() - downY;
                     nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));

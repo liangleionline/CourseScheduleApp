@@ -11,7 +11,7 @@ android {
         minSdk 24
         targetSdk 34
         versionCode 67
-        versionName "2.8.9-glow"
+        versionName "2.8.9"
     }
 
     signingConfigs {

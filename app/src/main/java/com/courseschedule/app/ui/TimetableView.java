@@ -71,6 +71,7 @@ public class TimetableView extends View {
     private final TextPaint dayPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint timePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
+    private final RectF floatCellRect = new RectF(); // 上浮绘制复用（避免每帧分配）
 
     private Map<String, Course> courseById = new LinkedHashMap<>();
 
@@ -150,6 +151,7 @@ public class TimetableView extends View {
     private ValueAnimator glowAnimator;
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private BlurMaskFilter glowBlur; // 光晕高斯模糊（init 中按屏幕密度创建）
+    private float density;             // 屏幕密度缓存（避免每帧 getResources 分配）
 
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
@@ -159,10 +161,14 @@ public class TimetableView extends View {
 
     private void init() {
         float d = getResources().getDisplayMetrics().density;
+        density = d; // 缓存屏幕密度，避免每帧 getResources 分配
         pad = 8 * d;
         timeAxisW = 44 * d;
         headerH = 44 * d;
         glowBlur = new BlurMaskFilter(10f * d, BlurMaskFilter.Blur.NORMAL); // 光晕柔化模糊
+        // 整页自绘视图开硬件层：ViewPager2 滚动时页面作为 GPU 纹理整体平移合成，
+        // 不再每帧在 CPU 上重绘全部磁贴 → 滑动跟手流畅；动画期间 invalidate 由 GPU 重建更快
+        setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         linePaint.setColor(0xFFE0E0E0);
         linePaint.setStrokeWidth(1f * d);
@@ -492,7 +498,7 @@ public class TimetableView extends View {
      *  连续波浪：正弦曲线从原位上浮到顶点再落下——顶点处速度自然归零平滑转向，无折角；
      *  落回前叠加一个短周期正弦，形成轻微过冲回弹。全程连续，等待期停原位 */
     private float cellDropOffset(int rowIdx, int colIdx, int totalRows, int totalCols) {
-        float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
+        float dropPx = ENTRANCE_DROP_DP * density;
         long delay = (long) (totalRows - 1 - rowIdx) * ENTRANCE_STAGGER
                 + (long) (totalCols - 1 - colIdx) * ENTRANCE_STAGGER_COL;
         long elapsed = SystemClock.uptimeMillis() - entranceStart - delay;
@@ -970,7 +976,6 @@ public class TimetableView extends View {
         if (c == null) return;
         float lift = floatLift(floatProgress);
         if (lift <= 0.001f) return;
-        float density = getResources().getDisplayMetrics().density;
         float liftPx = 18f * density * lift;              // 上浮高度
         float scale = 1f + 0.08f * lift;                  // 放大 8%
         float t = (SystemClock.uptimeMillis() - floatStart) / 1000f; // 实时时间驱动摆动
@@ -989,8 +994,9 @@ public class TimetableView extends View {
             cellPaint.setShadowLayer(5f * density, 0, 2f * density, 0x33000000); // 极淡投影
             canvas.drawRect(-r.width() / 2f, -r.height() / 2f, r.width() / 2f, r.height() / 2f, cellPaint);
             cellPaint.clearShadowLayer();
-            drawTileGlass(canvas, new RectF(-r.width() / 2f, -r.height() / 2f, r.width() / 2f, r.height() / 2f), 255);
-            drawCellText(canvas, new RectF(-r.width() / 2f, -r.height() / 2f, r.width() / 2f, r.height() / 2f),
+            floatCellRect.set(-r.width() / 2f, -r.height() / 2f, r.width() / 2f, r.height() / 2f);
+            drawTileGlass(canvas, floatCellRect, 255);
+            drawCellText(canvas, floatCellRect,
                     c.name, c.teacher == null ? "" : c.teacher, c.textColor, false);
             canvas.restore();
         }
@@ -1105,7 +1111,6 @@ public class TimetableView extends View {
         RectF r = glowRect;
         if (intensity > 0.01f) {
             // 光晕：白色圆角方形先画，高斯模糊使其边缘柔和向外扩散淡出
-            float density = getResources().getDisplayMetrics().density;
             float extent = 7f * density; // 光晕外扩范围（收紧）
             float corner = 5f * density; // 圆角半径（柔和边角）
             glowPaint.setShader(null);
@@ -1144,6 +1149,6 @@ public class TimetableView extends View {
     }
 
     private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density);
+        return (int) (v * density);
     }
 }

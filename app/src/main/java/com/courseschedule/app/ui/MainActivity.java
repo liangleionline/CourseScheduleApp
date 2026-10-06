@@ -225,7 +225,10 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         refresh();
         // 回到前台（后台切回/设置页返回）时重播磁贴入场动画
-        if (timetable.getVisibility() == View.VISIBLE) timetable.playEntrance();
+        if (timetable.getVisibility() == View.VISIBLE) {
+            timetable.playEntrance();
+            timetable.glowCurrentCourse(); // 入场波浪动画结束后，对当前应上的课发光 2 秒
+        }
         // 打开 App 后主动刷新桌面小组件
         try {
             com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(this);

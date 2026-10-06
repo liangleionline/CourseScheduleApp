@@ -6,6 +6,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.os.SystemClock;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -20,14 +22,16 @@ import android.view.animation.DecelerateInterpolator;
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.ColorUtil;
 import com.courseschedule.app.data.Course;
-import com.courseschedule.app.data.RenderedCell;
-import com.courseschedule.app.data.TimetableEngine;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import com.courseschedule.app.data.RenderedCell;
+import com.courseschedule.app.data.TimetableEngine;
+
 
 /**
  * 周课程表视图：统一行高网格，按时间行显示课程与非课程。
@@ -139,6 +143,16 @@ public class TimetableView extends View {
     private final Map<String, FloatParam> floatParams = new LinkedHashMap<>();
     private final java.util.Random floatRand = new java.util.Random();
 
+    // ---------- 当前应上课发光（打开App/回前台时，入场波浪动画结束后发光 2 秒） ----------
+    private boolean glowPending;        // 等待入场动画结束后发光
+    private String glowPendingKey;
+    private String glowKey;             // 正在发光的磁贴 key（day|startMin|refId）
+    private final RectF glowRect = new RectF();
+    private Course glowCourse;
+    private float glowProgress;         // 0~1
+    private ValueAnimator glowAnimator;
+    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
         touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
@@ -197,6 +211,7 @@ public class TimetableView extends View {
         resetFlip(); // 数据刷新/切换课程表时复位翻转磁贴
         cancelFloat(); // 同时结束上浮
         cancelPendingTap(); // 挂起的单击作废
+        cancelGlow(); // 同时结束发光
         invalidate();
     }
 
@@ -299,6 +314,11 @@ public class TimetableView extends View {
         long entranceNow = SystemClock.uptimeMillis();
         boolean entranceRunning = entranceNow < entranceStart + ENTRANCE_DUR
                 + (long) rows.size() * ENTRANCE_STAGGER + (long) days.size() * ENTRANCE_STAGGER_COL;
+        // 入场波浪动画结束后：对当前应上的课发光（如已请求）
+        if (glowPending && !entranceRunning) {
+            glowPending = false;
+            startGlow(glowPendingKey);
+        }
         int visibleCount = 0;
         for (Row r2 : rows) {
             if ((isBandRow(r2) ? bandH : rowH) > 0) visibleCount++;
@@ -344,9 +364,10 @@ public class TimetableView extends View {
                     float x = dayAreaX + idx * colW;
                     float yDraw = y + cellDropOffset(rowIdx, idx, visibleCount, days.size());
                     rect.set(x + 2, yDraw + 1, x + colW - 2, yDraw + rh - 1);
-                    // 翻转/上浮中的磁贴：跳过常规绘制，循环结束后单独绘制（盖在其余磁贴之上）
+                    // 翻转/上浮/发光中的磁贴：跳过常规绘制，循环结束后单独绘制（盖在其余磁贴之上）
                     String key = day + "|" + cell.startMin + "|" + cell.refId;
-                    if (isFlipping(key) || isFloating(cell.refId)) {
+                    if (isFlipping(key) || isFloating(cell.refId)
+                            || (glowKey != null && glowKey.equals(key))) {
                         continue;
                     }
                     cellPaint.setColor(c.bgColor);
@@ -363,6 +384,7 @@ public class TimetableView extends View {
             y += rh;
         }
         if (!entranceRunning) canvas.drawLine(dayAreaX, y, w - pad, y, linePaint); // 底边线同动画期间隐藏
+        drawGlowCell(canvas); // 当前应上课发光（光晕在磁贴后，颜色随磁贴配色）
         drawFlippedCell(canvas); // 翻转磁贴最后绘制（3D 翻转显示背面详情）
         drawFloatingCells(canvas); // 双击上浮的磁贴最后绘制（漂浮在最上层）
         if (entranceRunning) postInvalidateOnAnimation(); // 动画期间持续重绘
@@ -566,6 +588,7 @@ public class TimetableView extends View {
                         pressRelease(true); // 转为滑动/下拉，取消按压
                         resetFlip();        // 布局将变化，同时复位翻转磁贴
                         cancelFloat();      // 滑动/下拉时同样结束上浮
+                        cancelGlow();       // 布局变化，结束发光
                     }
                 }
                 if (moved) {
@@ -772,6 +795,7 @@ public class TimetableView extends View {
             if (exist.anim != null) exist.anim.cancel();
             flips.remove(exist);
         }
+        if (glowKey != null && glowKey.equals(key)) cancelGlow(); // 翻转的磁贴结束发光
         RectF r = new RectF();
         float acc = headerH + pad;
         float dayAreaX = timeAxisW + pad;
@@ -852,6 +876,7 @@ public class TimetableView extends View {
     private void triggerFloat(String courseRefId) {
         if (courseRefId == null) return;
         cancelFloat();
+        cancelGlow(); // 上浮时结束发光
         resetFlip(); // 翻转中的磁贴复位
         floatRects.clear();
         floatParams.clear();
@@ -957,6 +982,128 @@ public class TimetableView extends View {
             canvas.restore();
         }
         if (floatAnimator != null && floatAnimator.isRunning()) postInvalidateOnAnimation();
+    }
+
+    // ---------- 当前应上课发光 ----------
+
+    /** 按系统当前时间查找"正在上的课程"磁贴 key；无（课间/没课/不显示该天）则返回 null */
+    private String findCurrentCourseKey() {
+        Calendar cal = Calendar.getInstance();
+        int weekday = cal.get(Calendar.DAY_OF_WEEK); // 1=周日 2=周一 ... 7=周六
+        int tableDay = weekday - 1;                  // 转课程表 day：1=周一 ... 7=周日
+        if (tableDay < 1 || !days.contains(tableDay)) return null; // 不含该天（如未开启周末）
+        int minutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
+        for (Row row : rows) {
+            RenderedCell c = row.dayCells.get(tableDay);
+            if (c != null && c.type == TimetableEngine.TYPE_COURSE
+                    && c.startMin <= minutes && minutes < c.endMin) {
+                return tableDay + "|" + c.startMin + "|" + c.refId;
+            }
+        }
+        return null;
+    }
+
+    /** 打开App/回前台调用：入场波浪动画结束后，对当前应上的课发光（2 秒） */
+    public void glowCurrentCourse() {
+        String key = findCurrentCourseKey();
+        if (key == null) return; // 当前没有正在上的课程
+        glowPending = true;
+        glowPendingKey = key;
+        invalidate(); // 由 onDraw 检测入场动画结束后启动发光
+    }
+
+    /** 启动发光（光晕从磁贴后发出，颜色随磁贴配色） */
+    private void startGlow(String key) {
+        cancelGlow();
+        String[] parts = key.split("\\|");
+        if (parts.length < 3) return;
+        Course c = courseById.get(parts[2]);
+        if (c == null) return;
+        RectF r = new RectF();
+        float acc = headerH + pad;
+        float dayAreaX = timeAxisW + pad;
+        for (Row row : rows) {
+            float rh = isBandRow(row) ? bandH : rowH;
+            if (rh <= 0) { acc += rh; continue; }
+            for (int idx = 0; idx < days.size(); idx++) {
+                int d = days.get(idx);
+                RenderedCell cell = row.dayCells.get(d);
+                if (cell == null) continue;
+                if (key.equals(d + "|" + cell.startMin + "|" + cell.refId)) {
+                    float x = dayAreaX + idx * colW;
+                    r.set(x + 2, acc + 1, x + colW - 2, acc + rh - 1);
+                }
+            }
+            acc += rh;
+        }
+        if (r.isEmpty()) return;
+        glowKey = key;
+        glowRect.set(r);
+        glowCourse = c;
+        glowProgress = 0f;
+        glowAnimator = ValueAnimator.ofFloat(0f, 1f);
+        glowAnimator.setDuration(2000); // 持续 2 秒
+        glowAnimator.setInterpolator(null);
+        glowAnimator.addUpdateListener(a -> {
+            glowProgress = (float) a.getAnimatedValue();
+            invalidate();
+        });
+        glowAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                glowKey = null;
+                invalidate();
+            }
+        });
+        glowAnimator.start();
+    }
+
+    /** 立即结束发光 */
+    private void cancelGlow() {
+        if (glowAnimator != null) {
+            glowAnimator.cancel();
+            glowAnimator = null;
+        }
+        glowKey = null;
+        glowPending = false;
+        glowPendingKey = null;
+        invalidate();
+    }
+
+    /** 发光强度包络：0~12% 快速亮起，12%~85% 保持，85%~100% 淡出 */
+    private float glowIntensity(float p) {
+        if (p < 0.12f) return p / 0.12f;
+        if (p > 0.85f) return (1f - p) / 0.15f;
+        return 1f;
+    }
+
+    /** 发光磁贴：光晕先画在磁贴后（径向渐变，颜色随磁贴配色），再画磁贴本体（轻微提亮） */
+    private void drawGlowCell(Canvas canvas) {
+        if (glowKey == null || glowCourse == null || glowRect.isEmpty()) return;
+        float intensity = glowIntensity(glowProgress);
+        if (intensity <= 0.01f) return;
+        float density = getResources().getDisplayMetrics().density;
+        RectF r = glowRect;
+        float cx = r.centerX(), cy = r.centerY();
+        float radius = (float) Math.hypot(r.width(), r.height()) / 2f + 16f * density;
+        int base = glowCourse.bgColor;
+        int centerColor = (base & 0x00FFFFFF) | ((int) (170 * intensity) << 24);
+        int edgeColor = (base & 0x00FFFFFF); // 边缘透明
+        glowPaint.setShader(new RadialGradient(cx, cy, radius,
+                new int[]{centerColor, centerColor, edgeColor},
+                new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawCircle(cx, cy, radius, glowPaint);
+        glowPaint.setShader(null);
+        // 磁贴本体：发光状态轻微提亮（光源从磁贴后发出）
+        cellPaint.setColor(glowCourse.bgColor);
+        canvas.drawRect(r, cellPaint);
+        glassPaint.setShader(null);
+        glassPaint.setColor(0xFFFFFFFF);
+        glassPaint.setAlpha((int) (38 * intensity));
+        canvas.drawRect(r, glassPaint);
+        drawTileGlass(canvas, r, 255);
+        drawCellText(canvas, r, glowCourse.name,
+                glowCourse.teacher == null ? "" : glowCourse.teacher, glowCourse.textColor, false);
     }
 
     /** 翻转缩放曲线：0~12% 拿起放大(1→1.18)，12%~85% 保持，85%~100% 放下缩回(1.18→1) */

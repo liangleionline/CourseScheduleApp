@@ -55,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
         data = AppData.get(this);
         data.preseedCoursesIfEmpty();
         data.preseedNonCoursesIfEmpty();
-        showCrashLogIfAny(); // 崩溃诊断：上次运行若闪退，展示堆栈便于定位
 
         root = new FrameLayout(this);
         root.setBackgroundColor(0xFFF2F2F2);
@@ -185,31 +184,6 @@ public class MainActivity extends AppCompatActivity {
         emptyView.addView(createBtnView, lpWrap());
 
         refresh();
-    }
-
-    /** 若存在上次崩溃日志则展示（用于定位闪退根因） */
-    private void showCrashLogIfAny() {
-        try {
-            java.io.File cf = new java.io.File(getFilesDir(), com.courseschedule.app.CrashApplication.CRASH_LOG);
-            if (cf.exists() && cf.length() > 0) {
-                StringBuilder sb = new StringBuilder();
-                try (java.io.BufferedReader br = new java.io.BufferedReader(
-                        new java.io.FileReader(cf))) {
-                    String line;
-                    int n = 0;
-                    while ((line = br.readLine()) != null && n < 4000) {
-                        sb.append(line).append('\n');
-                        n += line.length() + 1;
-                    }
-                }
-                new MaterialAlertDialogBuilder(this)
-                        .setTitle("上次运行发生崩溃（日志已保存）")
-                        .setMessage(sb.toString())
-                        .setPositiveButton("知道了", null)
-                        .show();
-            }
-        } catch (Exception ignored) {
-        }
     }
 
     /** ViewPager2 适配器：每个课程表一页，页内一个 TimetableView */

@@ -87,7 +87,6 @@ public class TimetableView extends View {
     private static final long ENTRANCE_STAGGER_COL = 30L;
     private static final float ENTRANCE_DROP_DP = 6f; // 磁贴入场上移距离（小风吹过的轻柔感）
     private long entranceStart = -1L;
-    private final OvershootInterpolator entranceInterp = new OvershootInterpolator(3f);
 
     private float downX, downY;
     private boolean moved;
@@ -474,7 +473,8 @@ public class TimetableView extends View {
     }
 
     /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉。
-     *  全程连续：等待期停原位 → 15% 时间平滑上移到顶点（无瞬移残影）→ 从顶点 Overshoot 回弹落回原位 */
+     *  连续波浪：正弦曲线从原位上浮到顶点再落下——顶点处速度自然归零平滑转向，无折角；
+     *  落回前叠加一个短周期正弦，形成轻微过冲回弹。全程连续，等待期停原位 */
     private float cellDropOffset(int rowIdx, int colIdx, int totalRows, int totalCols) {
         float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
         long delay = (long) (totalRows - 1 - rowIdx) * ENTRANCE_STAGGER
@@ -482,15 +482,12 @@ public class TimetableView extends View {
         long elapsed = SystemClock.uptimeMillis() - entranceStart - delay;
         if (elapsed <= 0L) return 0f; // 等待期磁贴停在原位置，不瞬移到顶点
         float p = Math.min(1f, elapsed / (float) ENTRANCE_DUR);
-        if (p < 0.15f) {
-            // 阶段1：从原位置平滑上移到顶点（加速缓入，模拟被吹起）
-            float q = p / 0.15f;
-            return -dropPx * q * q;
+        float wave = (float) Math.sin(Math.PI * p); // 0 → 顶点(1) → 0，顶点平滑
+        if (p > 0.6f) {
+            float q = (p - 0.6f) / 0.4f;
+            wave += 0.08f * (float) Math.sin(Math.PI * q); // 落回前轻微过冲回弹
         }
-        // 阶段2：从顶点掉落回原位（Overshoot 回弹）
-        float q = Math.min(1f, (p - 0.15f) / 0.85f);
-        float t = entranceInterp.getInterpolation(q);
-        return (t - 1f) * dropPx;
+        return -dropPx * wave;
     }
 
     /** 平面玻璃罩层：整块色块被一层均匀的极淡白玻璃覆盖，无渐变、无高光、无边缘线，保持完全平面 */

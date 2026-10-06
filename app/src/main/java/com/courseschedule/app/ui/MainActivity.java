@@ -191,17 +191,29 @@ public class MainActivity extends AppCompatActivity {
         if (idx < 0) return;
         int ni = idx + direction;
         if (ni < 0 || ni >= data.timetables.size()) return;
+        float w = root.getWidth();
+        // 阶段1：旧课表先跟随惯性继续滑出屏幕（松手后不是突然切换，而是连贯滑出）
+        timetable.animate().translationX(direction > 0 ? w : -w).setDuration(220)
+                .withEndAction(() -> applyTimetableSwitch(ni, direction, w))
+                .start();
+    }
+
+    /** 旧课表滑出完成后：切换数据，新课表从反方向滑入，再播放入场波浪+发光 */
+    private void applyTimetableSwitch(int ni, int direction, float w) {
         data.setActiveTimetable(data.timetables.get(ni).id);
         timetable.setData(data);
         titleView.setText(data.activeTimetable().name);
         updateEmptyState(); // 同步空状态：新课表若未排课，显示"开始排课"入口
-        float w = root.getWidth();
-        // 随手滑动：当前 view 已在手指拖出的偏移位置，直接从该位置滑回原位；
-        // 若未拖拽（如将来其他入口触发），先移到屏幕外再滑入
-        if (Math.abs(timetable.getTranslationX()) < 1f) {
-            timetable.setTranslationX(direction > 0 ? -w : w);
+        if (!data.hasSchedule()) {
+            // 新课表未排课：旧课表已滑出，直接呈现空状态入口
+            timetable.setVisibility(View.GONE);
+            timetable.setTranslationX(0);
+            return;
         }
-        // 滑入到位后再播放磁贴入场动画（并触发当前应上课发光），避免与平移重叠
+        // 阶段2：新课表从反方向滑入
+        timetable.setVisibility(View.VISIBLE);
+        emptyView.setVisibility(View.GONE);
+        timetable.setTranslationX(direction > 0 ? -w : w);
         timetable.animate().translationX(0).setDuration(240)
                 .withEndAction(() -> {
                     timetable.playEntrance();

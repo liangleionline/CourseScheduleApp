@@ -39,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView titleView, emptyTitle, emptyHint;
     private TextView createBtn;
     private boolean pagerScrolling; // 是否正处于 ViewPager2 滚动中（进入滚动状态时停一次动画）
+    private int lastTimetableCount = -1; // 上次适配器渲染时的课表数量（判断是否需整体重建页面）
 
     private final TimetableView.Listener cellListener = new TimetableView.Listener() {
         @Override
@@ -330,11 +331,14 @@ public class MainActivity extends AppCompatActivity {
         data = AppData.get(this);
         if (!data.timetables.isEmpty()) data.ensureTimetable();
         if (adapter == null) {
+            lastTimetableCount = data.timetables.size();
             adapter = new TimetablePagerAdapter();
             viewPager.setAdapter(adapter);
-        } else if (adapter.getItemCount() != data.timetables.size()) {
+        } else if (data.timetables.size() != lastTimetableCount) {
             // 课程表数量变化：不调 notifyDataSetChanged（ViewPager2 会留下旧 ViewHolder，
-            // 滑动时校验位置不一致崩溃），而是整体替换为新 adapter 实例，页面完全重建
+            // 滑动时校验位置不一致崩溃），而是整体替换为新 adapter 实例，页面完全重建。
+            // 注意不能用 adapter.getItemCount() 判断（其动态读 timetables.size()，恒相等）
+            lastTimetableCount = data.timetables.size();
             pageViews.clear();
             adapter = new TimetablePagerAdapter();
             viewPager.setAdapter(adapter);

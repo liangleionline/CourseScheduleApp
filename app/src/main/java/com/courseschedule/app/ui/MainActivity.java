@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,6 +14,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.courseschedule.app.data.AppData;
 import com.courseschedule.app.data.Course;
@@ -27,16 +30,22 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private AppData data;
-    private TimetableView timetable;
     private FrameLayout root;
-    private FrameLayout timetableHost; // 课表容器：左右切换时相邻课程表叠加其中
-    private TimetableView neighbor;     // 拖动中的相邻课程表视图
-    private int neighborDir = 0;        // 拖动方向：1=下一张(在右)，-1=上一张(在左)
-    private boolean neighborEdge = false; // 已到边界（无相邻课表，拖拽带阻尼）
-    private boolean dragging = false;
+    private ViewPager2 viewPager;          // 课程表左右滑动容器（ViewPager2：原生跟手/惯性/回弹/边界）
+    private TimetablePagerAdapter adapter;
+    private final SparseArray<TimetableView> pageViews = new SparseArray<>(); // position → 页视图
+    private TimetableView timetable;       // 当前页课表视图（onResume 入场/发光用）
     private LinearLayout emptyView;
     private TextView titleView, emptyTitle, emptyHint;
     private TextView createBtn;
+
+    private final TimetableView.Listener cellListener = new TimetableView.Listener() {
+        @Override
+        public void onCellClick(int day, int type, String refId, int startMin, int endMin) {
+            // 课程：长按触发 → 编辑；非课程：直接编辑
+            MainActivity.this.onCellClick(day, type, refId);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,39 +91,28 @@ public class MainActivity extends AppCompatActivity {
         settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settingsBtn);
 
-        // 课表区（填满可用区域，行高按可用高度均分，尽量一屏放下）
-        // host 为课表容器：左右切换时相邻课程表叠加其中，跟随手指进入屏幕
-        FrameLayout host = new FrameLayout(this);
-        timetableHost = host;
-        timetable = new TimetableView(this, null);
-        timetable.setListener(new TimetableView.Listener() {
-            @Override
-            public void onCellClick(int day, int type, String refId, int startMin, int endMin) {
-                // 课程：长按触发 → 编辑；非课程：直接编辑
-                MainActivity.this.onCellClick(day, type, refId);
-            }
-
-            @Override
-            public void onHorizontalDrag(float dx) {
-                handleDrag(dx);
-            }
-
-            @Override
-            public void onHorizontalDragEnd(float dx) {
-                handleDragEnd(dx);
-            }
-
-            @Override
-            public void onHorizontalDragCancel() {
-                handleDragCancel();
-            }
-        });
-        host.addView(timetable, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 课表区：ViewPager2 左右滑动切换多个课程表（原生跟手滑动，无抖动）
+        viewPager = new ViewPager2(this);
+        viewPager.setOrientation(ViewPager2.ORIENTATION_HORIZONTAL);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
         tl.weight = 1;
-        content.addView(host, tl);
+        content.addView(viewPager, tl);
+        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                if (position < 0 || position >= data.timetables.size()) return;
+                // 同步激活课表、标题、空状态；滑入到位后播放入场波浪 + 当前应上课发光
+                data.setActiveTimetable(data.timetables.get(position).id);
+                timetable = pageViews.get(position);
+                titleView.setText(data.activeTimetable().name);
+                updateEmptyState();
+                if (timetable != null && timetable.getVisibility() == View.VISIBLE) {
+                    timetable.playEntrance();
+                    timetable.glowCurrentCourse();
+                }
+            }
+        });
 
         // 底部提示
         TextView footer = new TextView(this);
@@ -125,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
         footer.setPadding(0, dp(6), 0, dp(8));
         content.addView(footer);
 
-        // 空状态
+        // 空状态（覆盖在课表上方；本体不消费触摸，空课表页仍可左右滑动切换）
         emptyView = new LinearLayout(this);
         emptyView.setOrientation(LinearLayout.VERTICAL);
         emptyView.setGravity(Gravity.CENTER);
@@ -163,6 +161,48 @@ public class MainActivity extends AppCompatActivity {
         emptyView.addView(createBtnView, lpWrap());
 
         refresh();
+    }
+
+    /** ViewPager2 适配器：每个课程表一页，页内一个 TimetableView */
+    private class TimetablePagerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        @Override
+        public int getItemCount() {
+            return data.timetables.size();
+        }
+
+        @Override
+        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            FrameLayout page = new FrameLayout(parent.getContext());
+            TimetableView tv = new TimetableView(parent.getContext(), null);
+            tv.setListener(cellListener);
+            page.addView(tv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return new RecyclerView.ViewHolder(page) {
+            };
+        }
+
+        @Override
+        public void onBindViewHolder(RecyclerView.ViewHolder h, int position) {
+            TimetableView tv = (TimetableView) ((FrameLayout) h.itemView).getChildAt(0);
+            pageViews.put(position, tv);
+            bindPage(tv, position);
+        }
+    }
+
+    /** 渲染指定课表内容到某页视图（临时指向其 entries，setData 同步计算 rows 后还原） */
+    private void bindPage(TimetableView tv, int position) {
+        if (position < 0 || position >= data.timetables.size()) return;
+        List<ScheduleEntry> saved = data.entries;
+        data.entries = data.timetables.get(position).entries;
+        tv.setData(data);
+        data.entries = saved;
+    }
+
+    private void refreshPages() {
+        for (int i = 0; i < data.timetables.size(); i++) {
+            TimetableView tv = pageViews.get(i);
+            if (tv != null) bindPage(tv, i);
+        }
     }
 
     private LinearLayout.LayoutParams lpWrap() {
@@ -206,118 +246,13 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ---------- 左右切换课程表：邻表跟随手指进入屏幕（ViewPager 式） ----------
-
-    /** 拖拽中：主表跟随手指平移，相邻课程表同步从屏幕外进入（已进入部分不回退） */
-    private void handleDrag(float dx) {
-        if (!dragging) {
-            dragging = true;
-            neighborDir = dx > 0 ? -1 : 1; // 往右拖→看上一张(在左)；往左拖→看下一张(在右)
-            createNeighbor();
-        }
-        float w = root.getWidth();
-        if (neighborEdge) {
-            timetable.setTranslationX(dx * 0.3f); // 已到边界：阻尼跟随
-        } else {
-            timetable.setTranslationX(dx);
-            neighbor.setTranslationX(dx + (neighborDir > 0 ? w : -w)); // 邻表同步进入
-        }
-    }
-
-    /** 松手：超过阈值则旧课表继续滑出、邻表继续滑入到位；否则一起回弹 */
-    private void handleDragEnd(float dx) {
-        if (!dragging) return;
-        dragging = false;
-        float w = root.getWidth();
-        float hThresh = Math.max(dp(40), w * 0.2f);
-        if (neighborEdge || Math.abs(dx) <= hThresh) {
-            // 未达阈值 / 已到边界：主表与邻表回弹
-            if (neighbor != null) {
-                final TimetableView n = neighbor;
-                n.animate().translationX(neighborDir > 0 ? w : -w).setDuration(200)
-                        .withEndAction(() -> removeNeighbor(n)).start();
-            }
-            timetable.animate().translationX(0).setDuration(200).start();
-        } else {
-            // 超过阈值：主表滑出，邻表从当前位置继续滑入到位
-            final int dir = neighborDir; // 用局部固定方向：withEndAction 延时执行时字段已被重置
-            float out = neighborDir > 0 ? w : -w;
-            timetable.animate().translationX(out).setDuration(200).start();
-            neighbor.animate().translationX(0).setDuration(240)
-                    .withEndAction(() -> applyTimetableSwitch(dir, w)).start();
-        }
-        neighborEdge = false;
-        neighborDir = 0;
-    }
-
-    /** 手势取消：一律回弹 */
-    private void handleDragCancel() {
-        if (!dragging) return;
-        dragging = false;
-        float w = root.getWidth();
-        if (neighbor != null) {
-            final TimetableView n = neighbor;
-            n.animate().translationX(neighborDir > 0 ? w : -w).setDuration(200)
-                    .withEndAction(() -> removeNeighbor(n)).start();
-        }
-        timetable.animate().translationX(0).setDuration(200).start();
-        neighborEdge = false;
-        neighborDir = 0;
-    }
-
-    /** 创建相邻课程表视图（渲染目标课表内容，叠加在课表容器中，位于屏幕外） */
-    private void createNeighbor() {
-        int idx = data.timetableIndex(data.activeTimetableId);
-        int ni = idx + neighborDir;
-        if (ni < 0 || ni >= data.timetables.size()) {
-            neighborEdge = true;
-            return;
-        }
-        if (neighbor != null) removeNeighbor(neighbor);
-        TimetableView v = new TimetableView(this, null);
-        // 渲染目标课表内容：临时指向其 entries（setData 同步计算 rows 后还原）
-        java.util.List<ScheduleEntry> saved = data.entries;
-        data.entries = data.timetables.get(ni).entries;
-        v.setData(data);
-        data.entries = saved;
-        v.setVisibility(View.VISIBLE);
-        timetableHost.addView(v, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        float w = root.getWidth();
-        v.setTranslationX(neighborDir > 0 ? w : -w); // 初始位于拖拽侧的屏幕外
-        neighbor = v;
-    }
-
-    private void removeNeighbor(TimetableView v) {
-        if (v != null && v.getParent() == timetableHost) timetableHost.removeView(v);
-        if (neighbor == v) neighbor = null;
-    }
-
-    /** 切换完成：主表内容更新为新课程表并复位，移除邻表，播放入场波浪+发光 */
-    private void applyTimetableSwitch(int direction, float w) {
-        int idx = data.timetableIndex(data.activeTimetableId);
-        int ni = idx + direction;
-        if (ni >= 0 && ni < data.timetables.size()) {
-            data.setActiveTimetable(data.timetables.get(ni).id);
-        }
-        timetable.setData(data);
-        titleView.setText(data.activeTimetable().name);
-        updateEmptyState(); // 同步空状态：新课表若未排课，显示"开始排课"入口
-        timetable.setTranslationX(0); // 内容已是新课表，主表放回原位（与邻表一致，无跳变）
-        removeNeighbor(neighbor);
-        if (timetable.getVisibility() == View.VISIBLE) {
-            timetable.playEntrance();
-            timetable.glowCurrentCourse(); // 左右切换课程表后：当前应上的课同样发光
-        }
-    }
-
-    /** 按当前激活课程表同步课表/空状态（refresh 与左右切换共用） */
+    /** 按当前页同步空状态（空课表页显示"开始排课"入口，其余正常显示课表） */
     private void updateEmptyState() {
         boolean any = !data.timetables.isEmpty();
         AppData.Timetable active = data.activeTimetable();
-        boolean has = any && data.hasSchedule();
-        timetable.setData(data);
-        timetable.setVisibility(has ? View.VISIBLE : View.GONE);
+        int pos = Math.max(0, viewPager.getCurrentItem());
+        boolean has = any && pos < data.timetables.size()
+                && !data.timetables.get(pos).entries.isEmpty();
         emptyView.setVisibility(has ? View.GONE : View.VISIBLE);
         if (!has) {
             emptyTitle.setText(any && active != null ? "「" + active.name + "」还没有排课" : "还没有课程表");
@@ -331,6 +266,21 @@ public class MainActivity extends AppCompatActivity {
     private void refresh() {
         data = AppData.get(this);
         if (!data.timetables.isEmpty()) data.ensureTimetable();
+        if (adapter == null) {
+            adapter = new TimetablePagerAdapter();
+            viewPager.setAdapter(adapter);
+        } else if (adapter.getItemCount() != data.timetables.size()) {
+            pageViews.clear();
+            adapter.notifyDataSetChanged();
+        } else {
+            refreshPages();
+        }
+        // 定位到激活课表
+        int idx = data.timetableIndex(data.activeTimetableId);
+        if (idx < 0) idx = 0;
+        if (viewPager.getCurrentItem() != idx) {
+            viewPager.setCurrentItem(idx, false);
+        }
         AppData.Timetable active = data.activeTimetable();
         titleView.setText(active != null ? active.name : "课程表");
         updateEmptyState();
@@ -340,8 +290,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         refresh();
-        // 回到前台（后台切回/设置页返回）时重播磁贴入场动画
-        if (timetable.getVisibility() == View.VISIBLE) {
+        // 回到前台（后台切回/设置页返回）时重播当前页磁贴入场动画
+        timetable = pageViews.get(viewPager.getCurrentItem());
+        if (timetable != null && timetable.getVisibility() == View.VISIBLE) {
             timetable.playEntrance();
             timetable.glowCurrentCourse(); // 入场波浪动画结束后，对当前应上的课发光 2 秒
         }

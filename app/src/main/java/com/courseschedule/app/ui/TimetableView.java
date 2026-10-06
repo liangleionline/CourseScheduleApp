@@ -45,12 +45,6 @@ public class TimetableView extends View {
 
     public interface Listener {
         void onCellClick(int day, int type, String refId, int startMin, int endMin);
-        /** 横向拖拽中（已超过 touchSlop 且横向主导），dx 为手指相对按下点的实时位移 */
-        void onHorizontalDrag(float dx);
-        /** 横向拖拽松手（正常抬起），dx 为最终位移 */
-        void onHorizontalDragEnd(float dx);
-        /** 横向拖拽手势被取消 */
-        void onHorizontalDragCancel();
     }
 
     private static final String[] DAY_NAMES = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
@@ -93,7 +87,6 @@ public class TimetableView extends View {
     private long entranceStart = -1L;
 
     private float downX, downY;
-    private boolean swipeDrag; // 是否处于横向拖拽跟随（左右切换课程表随手滑动）
     private boolean moved;
     private final int touchSlop;
 
@@ -583,7 +576,6 @@ public class TimetableView extends View {
                 downX = event.getX();
                 downY = event.getY();
                 moved = false;
-                swipeDrag = false;
                 longPressed = false;
                 cancelFloat(); // 触摸时结束上浮
                 cancelAnim();
@@ -605,35 +597,16 @@ public class TimetableView extends View {
                     }
                 }
                 if (moved) {
-                    float dx = event.getX() - downX;
+                    // 下拉展开非课程项（0~1），跟随手指（横向滑动由外层 ViewPager 拦截切换课程表）
                     float dy = event.getY() - downY;
-                    if (Math.abs(dx) > Math.abs(dy) * 1.2f) {
-                        // 横向主导：上报拖拽位移（由宿主完成邻表跟随与平移），随手滑动切换课程表
-                        swipeDrag = true;
-                        if (listener != null) listener.onHorizontalDrag(dx);
-                    } else {
-                        // 纵向主导：下拉展开非课程项（0~1），跟随手指
-                        nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
-                        invalidate();
-                    }
+                    nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
+                    invalidate();
                 }
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 cancelLongPressTimer();
                 if (moved) {
-                    // 横向拖拽结束：松手由宿主判定切换/回弹；纵向则收起非课程项
-                    if (swipeDrag) {
-                        float dx = event.getX() - downX;
-                        swipeDrag = false;
-                        if (listener != null) {
-                            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                                listener.onHorizontalDragEnd(dx);
-                            } else {
-                                listener.onHorizontalDragCancel();
-                            }
-                        }
-                    }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);
                 } else if (longPressed) {

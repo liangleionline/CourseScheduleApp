@@ -311,10 +311,22 @@ public class SettingsActivity extends AppCompatActivity {
 
         MaterialButton del = smallBtn("删");
         del.setTextColor(0xFFEF5350);
-        del.setOnClickListener(v -> {
-            data.deleteCourse(course.id);
-            render();
-        });
+        del.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("删除课程「" + course.name + "」？")
+                .setMessage("删除后，课表中已引用该课程的位置将一并移除。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.deleteCourse(course.id);
+                    // 局部更新：只移除该行，不整页重建（避免退出动画与回到顶部）
+                    ViewGroup parent = (ViewGroup) row.getParent();
+                    if (parent != null) {
+                        parent.removeView(row);
+                        if (data.courses.isEmpty() && parent instanceof LinearLayout) {
+                            ((LinearLayout) parent).addView(hint("暂无课程"));
+                        }
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show());
         row.addView(del, lpWrap());
         return row;
     }
@@ -391,10 +403,22 @@ public class SettingsActivity extends AppCompatActivity {
 
         MaterialButton del = smallBtn("删");
         del.setTextColor(0xFFEF5350);
-        del.setOnClickListener(v -> {
-            data.deleteNonCourse(n.id);
-            render();
-        });
+        del.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("删除非课程项「" + n.name + "」？")
+                .setMessage("删除后，课表中已引用该项目的位子将一并移除。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.deleteNonCourse(n.id);
+                    // 局部更新：只移除该行，不整页重建（避免退出动画与回到顶部）
+                    ViewGroup parent = (ViewGroup) row.getParent();
+                    if (parent != null) {
+                        parent.removeView(row);
+                        if (data.nonCourses.isEmpty() && parent instanceof LinearLayout) {
+                            ((LinearLayout) parent).addView(hint("暂无非课程项"));
+                        }
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show());
         row.addView(del, lpWrap());
         return row;
     }

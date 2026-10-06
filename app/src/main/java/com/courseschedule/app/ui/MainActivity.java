@@ -196,9 +196,12 @@ public class MainActivity extends AppCompatActivity {
         titleView.setText(data.activeTimetable().name);
         float w = root.getWidth();
         timetable.setTranslationX(direction > 0 ? -w : w);
-        // 滑入到位后再播放磁贴入场动画，避免与平移重叠
+        // 滑入到位后再播放磁贴入场动画（并触发当前应上课发光），避免与平移重叠
         timetable.animate().translationX(0).setDuration(240)
-                .withEndAction(() -> timetable.playEntrance()).start();
+                .withEndAction(() -> {
+                    timetable.playEntrance();
+                    timetable.glowCurrentCourse(); // 左右切换课程表后：当前应上的课同样发光
+                }).start();
     }
 
     private void refresh() {
@@ -225,7 +228,10 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         refresh();
         // 回到前台（后台切回/设置页返回）时重播磁贴入场动画
-        if (timetable.getVisibility() == View.VISIBLE) timetable.playEntrance();
+        if (timetable.getVisibility() == View.VISIBLE) {
+            timetable.playEntrance();
+            timetable.glowCurrentCourse(); // 入场波浪动画结束后，对当前应上的课发光 2 秒
+        }
         // 打开 App 后主动刷新桌面小组件
         try {
             com.courseschedule.app.widget.TimetableWidgetProvider.refreshAll(this);

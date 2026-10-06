@@ -136,7 +136,7 @@ public class SettingsActivity extends AppCompatActivity {
             if (data.timetables.size() <= 1) { toast("至少保留一个课程表"); return; }
             new MaterialAlertDialogBuilder(this)
                     .setTitle("删除「" + t.name + "」？")
-                    .setMessage("将删除该课程表的全部排布数据，课程库与非课程项保留。")
+                    .setMessage("将删除本课表的全部数据，包括课表布局与课程设置。\n删除后不可恢复。")
                     .setPositiveButton("删除", (d, w) -> {
                         data.deleteTimetable(t.id);
                         render();
@@ -463,44 +463,42 @@ public class SettingsActivity extends AppCompatActivity {
     private View clearCard() {
         LinearLayout c = card();
         TextView hint = new TextView(this);
-        hint.setText("清空课程表的排布与设置数据（课程项、非课程项、课时时长），清空后可重新排布。");
+        hint.setText("仅删除课程表的每日排布（布局），课程、课时、非课程项等其他全部数据保留。");
         hint.setTextColor(0xFF666666);
         hint.setTextSize(13);
         c.addView(hint);
 
-        // 清空当前课程表全部数据（排布+课程+非课程+恢复默认课时），弹窗带课程表名称确认
-        MaterialButton clearAll = new MaterialButton(this);
-        clearAll.setText("清空当前课程表数据");
-        clearAll.setTextColor(Color.WHITE);
-        clearAll.setBackgroundColor(0xFFEF5350);
-        clearAll.setOnClickListener(v -> {
+        // 仅删除当前课程表的每日排布，保留课程/非课程/课时等设置
+        MaterialButton clear = new MaterialButton(this);
+        clear.setText("删除当前课程表布局");
+        clear.setTextColor(Color.WHITE);
+        clear.setBackgroundColor(0xFFEF9A9A);
+        clear.setOnClickListener(v -> {
             AppData.Timetable t = data.activeTimetable();
             String nm = t != null ? t.name : "当前课程表";
             new MaterialAlertDialogBuilder(this)
-                    .setTitle("确定清空「" + nm + "」的全部数据？")
-                    .setMessage("将删除「" + nm + "」的每日排布、课程项与非课程项设置，并恢复默认课时时长。\n此操作不可恢复。")
-                    .setPositiveButton("清空", (d, w) -> {
-                        data.clearTimetableData();
-                        toast("已清空「" + nm + "」的数据");
-                        render();
+                    .setTitle("删除「" + nm + "」的布局？")
+                    .setMessage("将仅删除「" + nm + "」的每日排布，课程、课时、非课程项等设置全部保留。")
+                    .setPositiveButton("删除", (d, w) -> {
+                        data.clearSchedule();
+                        toast("已删除「" + nm + "」的布局");
                     })
                     .setNegativeButton("取消", null)
                     .show();
         });
-        c.addView(clearAll, lpTop(8));
+        c.addView(clear, lpTop(8));
 
-        // 清空所有课程表数据，弹窗确认
+        // 仅删除全部课程表的每日排布，保留各课表设置
         MaterialButton clearAllT = new MaterialButton(this);
-        clearAllT.setText("清空所有课程表数据");
+        clearAllT.setText("删除全部课程表布局");
         clearAllT.setTextColor(Color.WHITE);
-        clearAllT.setBackgroundColor(0xFFD32F2F);
+        clearAllT.setBackgroundColor(0xFFEF5350);
         clearAllT.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
-                .setTitle("确定清空所有课程表的数据？")
-                .setMessage("将删除全部课程表的每日排布、课程项与非课程项设置，并恢复默认课时时长。\n此操作不可恢复。")
-                .setPositiveButton("清空", (d, w) -> {
-                    data.clearAllTimetablesData();
-                    toast("已清空所有课程表的数据");
-                    render();
+                .setTitle("删除全部课程表的布局？")
+                .setMessage("将仅删除全部课程表的每日排布，各课表的课程、课时、非课程项等设置全部保留。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.clearAllSchedules();
+                    toast("已删除全部课程表的布局");
                 })
                 .setNegativeButton("取消", null)
                 .show());

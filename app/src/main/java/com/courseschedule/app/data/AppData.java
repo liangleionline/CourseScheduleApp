@@ -281,6 +281,15 @@ public class AppData {
         persist();
     }
 
+    /** 仅删除全部课程表的每日排布（布局），保留各课表的课程库、非课程库、课时时长等设置 */
+    public void clearAllSchedules() {
+        for (Timetable t : timetables) {
+            t.entries.clear();
+        }
+        syncActiveRefs();
+        persist();
+    }
+
     public void persist() {
         try {
             prefs.edit().putString(KEY_DATA, toJson().toString()).apply();

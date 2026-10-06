@@ -253,13 +253,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** 渲染指定课表内容到某页视图（临时指向其 entries，setData 同步计算 rows 后还原） */
+    /** 渲染指定课表内容到某页视图：临时指向该课表的全部独立设置
+     *  （排布、课程库、非课程库、课时时长），computeDay 才能用该课表自己的课程库解析引用，
+     *  否则会拿当前激活课表的课程库解析导致课程缺失、整页空白 */
     private void bindPage(TimetableView tv, int position) {
         if (position < 0 || position >= data.timetables.size()) return;
-        List<ScheduleEntry> saved = data.entries;
-        data.entries = data.timetables.get(position).entries;
+        AppData.Timetable t = data.timetables.get(position);
+        List<ScheduleEntry> savedE = data.entries;
+        List<Course> savedC = data.courses;
+        List<NonCourseItem> savedN = data.nonCourses;
+        int savedL = data.lessonDurationMin, savedF = data.firstStartMin;
+        data.entries = t.entries;
+        data.courses = t.courses;
+        data.nonCourses = t.nonCourses;
+        data.lessonDurationMin = t.lessonDurationMin;
+        data.firstStartMin = t.firstStartMin;
         tv.setData(data);
-        data.entries = saved;
+        data.entries = savedE;
+        data.courses = savedC;
+        data.nonCourses = savedN;
+        data.lessonDurationMin = savedL;
+        data.firstStartMin = savedF;
     }
 
     private void refreshPages() {

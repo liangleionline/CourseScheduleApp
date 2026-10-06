@@ -210,10 +210,10 @@ public class MainActivity extends AppCompatActivity {
             timetable.setTranslationX(0);
             return;
         }
-        // 阶段2：新课表从反方向滑入
+        // 阶段2：新课表从手指滑动的方向飞入（往左滑→新课表从右往左飞入；往右滑→从左往右飞入）
         timetable.setVisibility(View.VISIBLE);
         emptyView.setVisibility(View.GONE);
-        timetable.setTranslationX(direction > 0 ? -w : w);
+        timetable.setTranslationX(direction > 0 ? w : -w);
         timetable.animate().translationX(0).setDuration(240)
                 .withEndAction(() -> {
                     timetable.playEntrance();

@@ -491,7 +491,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         // 清空所有课程表数据，弹窗确认
         MaterialButton clearAllT = new MaterialButton(this);
-        clearAllT.setText("清空所有课表数据");
+        clearAllT.setText("清空所有课程表数据");
         clearAllT.setTextColor(Color.WHITE);
         clearAllT.setBackgroundColor(0xFFD32F2F);
         clearAllT.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)

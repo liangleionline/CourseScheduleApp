@@ -473,15 +473,23 @@ public class TimetableView extends View {
         subPaint.setTextSize(subBaseSize);
     }
 
-    /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉，Overshoot 回弹 */
+    /** 磁贴入场偏移：延迟 = (总行-行) × 行间隔 + (总列-列) × 列间隔，右下先掉、左上后掉。
+     *  全程连续：等待期停原位 → 15% 时间平滑上移到顶点（无瞬移残影）→ 从顶点 Overshoot 回弹落回原位 */
     private float cellDropOffset(int rowIdx, int colIdx, int totalRows, int totalCols) {
         float dropPx = ENTRANCE_DROP_DP * getResources().getDisplayMetrics().density;
         long delay = (long) (totalRows - 1 - rowIdx) * ENTRANCE_STAGGER
                 + (long) (totalCols - 1 - colIdx) * ENTRANCE_STAGGER_COL;
         long elapsed = SystemClock.uptimeMillis() - entranceStart - delay;
-        if (elapsed <= 0L) return -dropPx;
+        if (elapsed <= 0L) return 0f; // 等待期磁贴停在原位置，不瞬移到顶点
         float p = Math.min(1f, elapsed / (float) ENTRANCE_DUR);
-        float t = entranceInterp.getInterpolation(p);
+        if (p < 0.15f) {
+            // 阶段1：从原位置平滑上移到顶点（加速缓入，模拟被吹起）
+            float q = p / 0.15f;
+            return -dropPx * q * q;
+        }
+        // 阶段2：从顶点掉落回原位（Overshoot 回弹）
+        float q = Math.min(1f, (p - 0.15f) / 0.85f);
+        float t = entranceInterp.getInterpolation(q);
         return (t - 1f) * dropPx;
     }
 

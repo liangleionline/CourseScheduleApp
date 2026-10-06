@@ -196,9 +196,12 @@ public class MainActivity extends AppCompatActivity {
         titleView.setText(data.activeTimetable().name);
         float w = root.getWidth();
         timetable.setTranslationX(direction > 0 ? -w : w);
-        // 滑入到位后再播放磁贴入场动画，避免与平移重叠
+        // 滑入到位后再播放磁贴入场动画（并触发当前应上课发光），避免与平移重叠
         timetable.animate().translationX(0).setDuration(240)
-                .withEndAction(() -> timetable.playEntrance()).start();
+                .withEndAction(() -> {
+                    timetable.playEntrance();
+                    timetable.glowCurrentCourse(); // 左右切换课程表后：当前应上的课同样发光
+                }).start();
     }
 
     private void refresh() {

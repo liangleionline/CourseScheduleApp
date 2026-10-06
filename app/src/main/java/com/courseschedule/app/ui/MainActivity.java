@@ -240,10 +240,11 @@ public class MainActivity extends AppCompatActivity {
             timetable.animate().translationX(0).setDuration(200).start();
         } else {
             // 超过阈值：主表滑出，邻表从当前位置继续滑入到位
+            final int dir = neighborDir; // 用局部固定方向：withEndAction 延时执行时字段已被重置
             float out = neighborDir > 0 ? w : -w;
             timetable.animate().translationX(out).setDuration(200).start();
             neighbor.animate().translationX(0).setDuration(240)
-                    .withEndAction(() -> applyTimetableSwitch(neighborDir, w)).start();
+                    .withEndAction(() -> applyTimetableSwitch(dir, w)).start();
         }
         neighborEdge = false;
         neighborDir = 0;

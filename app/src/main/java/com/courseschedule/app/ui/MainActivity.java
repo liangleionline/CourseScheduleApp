@@ -198,7 +198,11 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            // ViewPager2 硬性要求：页面根布局必须 match_parent 填满整页（否则抛
+            // "Pages must fill the whole ViewPager2" 崩溃），LayoutParams 须为 RecyclerView.LayoutParams
             FrameLayout page = new FrameLayout(parent.getContext());
+            page.setLayoutParams(new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             TimetableView tv = new TimetableView(parent.getContext(), null);
             tv.setListener(cellListener);
             page.addView(tv, new FrameLayout.LayoutParams(

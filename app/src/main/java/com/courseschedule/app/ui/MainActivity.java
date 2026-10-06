@@ -213,6 +213,17 @@ public class MainActivity extends AppCompatActivity {
 
     /** ViewPager2 适配器：每个课程表一页，页内一个 TimetableView */
     private class TimetablePagerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        TimetablePagerAdapter() {
+            // ViewPager2 必需：数据集变化时依赖 stable ID 复用/重建 ViewHolder，
+            // 否则 notifyDataSetChanged 后滑动会抛 "Inconsistency detected" 崩溃
+            setHasStableIds(true);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return data.timetables.get(position).id.hashCode();
+        }
+
         @Override
         public int getItemCount() {
             return data.timetables.size();
@@ -322,8 +333,11 @@ public class MainActivity extends AppCompatActivity {
             adapter = new TimetablePagerAdapter();
             viewPager.setAdapter(adapter);
         } else if (adapter.getItemCount() != data.timetables.size()) {
+            // 课程表数量变化：不调 notifyDataSetChanged（ViewPager2 会留下旧 ViewHolder，
+            // 滑动时校验位置不一致崩溃），而是整体替换为新 adapter 实例，页面完全重建
             pageViews.clear();
-            adapter.notifyDataSetChanged();
+            adapter = new TimetablePagerAdapter();
+            viewPager.setAdapter(adapter);
         } else {
             refreshPages();
         }

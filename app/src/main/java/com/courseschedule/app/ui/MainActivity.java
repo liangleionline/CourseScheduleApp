@@ -39,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView titleView, emptyTitle, emptyHint;
     private TextView createBtn;
     private boolean pagerScrolling; // 是否正处于 ViewPager2 滚动中（进入滚动状态时停一次动画）
+    private int lastTimetableCount = -1; // 上次适配器渲染时的课表数量（判断是否需整体重建页面）
 
     private final TimetableView.Listener cellListener = new TimetableView.Listener() {
         @Override
@@ -54,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
         data = AppData.get(this);
         data.preseedCoursesIfEmpty();
         data.preseedNonCoursesIfEmpty();
-        showCrashLogIfAny(); // 崩溃诊断：上次运行若闪退，展示堆栈便于定位
 
         root = new FrameLayout(this);
         root.setBackgroundColor(0xFFF2F2F2);
@@ -186,31 +186,6 @@ public class MainActivity extends AppCompatActivity {
         refresh();
     }
 
-    /** 若存在上次崩溃日志则展示（用于定位闪退根因） */
-    private void showCrashLogIfAny() {
-        try {
-            java.io.File cf = new java.io.File(getFilesDir(), com.courseschedule.app.CrashApplication.CRASH_LOG);
-            if (cf.exists() && cf.length() > 0) {
-                StringBuilder sb = new StringBuilder();
-                try (java.io.BufferedReader br = new java.io.BufferedReader(
-                        new java.io.FileReader(cf))) {
-                    String line;
-                    int n = 0;
-                    while ((line = br.readLine()) != null && n < 4000) {
-                        sb.append(line).append('\n');
-                        n += line.length() + 1;
-                    }
-                }
-                new MaterialAlertDialogBuilder(this)
-                        .setTitle("上次运行发生崩溃（日志已保存）")
-                        .setMessage(sb.toString())
-                        .setPositiveButton("知道了", null)
-                        .show();
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
     /** ViewPager2 适配器：每个课程表一页，页内一个 TimetableView */
     private class TimetablePagerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         TimetablePagerAdapter() {
@@ -252,13 +227,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** 渲染指定课表内容到某页视图（临时指向其 entries，setData 同步计算 rows 后还原） */
+    /** 渲染指定课表内容到某页视图：临时指向该课表的全部独立设置
+     *  （排布、课程库、非课程库、课时时长），computeDay 才能用该课表自己的课程库解析引用，
+     *  否则会拿当前激活课表的课程库解析导致课程缺失、整页空白 */
     private void bindPage(TimetableView tv, int position) {
         if (position < 0 || position >= data.timetables.size()) return;
-        List<ScheduleEntry> saved = data.entries;
-        data.entries = data.timetables.get(position).entries;
+        AppData.Timetable t = data.timetables.get(position);
+        List<ScheduleEntry> savedE = data.entries;
+        List<Course> savedC = data.courses;
+        List<NonCourseItem> savedN = data.nonCourses;
+        int savedL = data.lessonDurationMin, savedF = data.firstStartMin;
+        data.entries = t.entries;
+        data.courses = t.courses;
+        data.nonCourses = t.nonCourses;
+        data.lessonDurationMin = t.lessonDurationMin;
+        data.firstStartMin = t.firstStartMin;
         tv.setData(data);
-        data.entries = saved;
+        data.entries = savedE;
+        data.courses = savedC;
+        data.nonCourses = savedN;
+        data.lessonDurationMin = savedL;
+        data.firstStartMin = savedF;
     }
 
     private void refreshPages() {
@@ -330,11 +319,14 @@ public class MainActivity extends AppCompatActivity {
         data = AppData.get(this);
         if (!data.timetables.isEmpty()) data.ensureTimetable();
         if (adapter == null) {
+            lastTimetableCount = data.timetables.size();
             adapter = new TimetablePagerAdapter();
             viewPager.setAdapter(adapter);
-        } else if (adapter.getItemCount() != data.timetables.size()) {
+        } else if (data.timetables.size() != lastTimetableCount) {
             // 课程表数量变化：不调 notifyDataSetChanged（ViewPager2 会留下旧 ViewHolder，
-            // 滑动时校验位置不一致崩溃），而是整体替换为新 adapter 实例，页面完全重建
+            // 滑动时校验位置不一致崩溃），而是整体替换为新 adapter 实例，页面完全重建。
+            // 注意不能用 adapter.getItemCount() 判断（其动态读 timetables.size()，恒相等）
+            lastTimetableCount = data.timetables.size();
             pageViews.clear();
             adapter = new TimetablePagerAdapter();
             viewPager.setAdapter(adapter);

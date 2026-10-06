@@ -59,6 +59,9 @@ public class SettingsActivity extends AppCompatActivity {
         title.setTypeface(null, Typeface.BOLD);
         inner.addView(title);
 
+        // 课程表选择器：显示「课程表名+设置 ▾」，点击可下拉切换当前设置的课程表
+        titleSelector(inner);
+
         sectionTitle(inner, "课程表管理");
         timetableSection(inner);
 
@@ -133,7 +136,7 @@ public class SettingsActivity extends AppCompatActivity {
             if (data.timetables.size() <= 1) { toast("至少保留一个课程表"); return; }
             new MaterialAlertDialogBuilder(this)
                     .setTitle("删除「" + t.name + "」？")
-                    .setMessage("将删除该课程表的全部排布数据，课程库与非课程项保留。")
+                    .setMessage("将删除本课表的全部数据，包括课表布局与课程设置。\n删除后不可恢复。")
                     .setPositiveButton("删除", (d, w) -> {
                         data.deleteTimetable(t.id);
                         render();
@@ -161,6 +164,55 @@ public class SettingsActivity extends AppCompatActivity {
                     String name = et.getText().toString().trim();
                     if (name.isEmpty()) name = "我的课程表";
                     onOk.accept(name);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /** 顶部课程表选择器：显示「课程表名+设置 ▾」，点击弹出下拉菜单切换当前设置的课程表 */
+    private void titleSelector(LinearLayout parent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(8));
+        row.setOnClickListener(v -> showTimetablePicker());
+        parent.addView(row);
+
+        AppData.Timetable active = data.activeTimetable();
+        // 名称+▾作为一个整体居左，▾紧贴文字右侧，不撑满不靠右
+        LinearLayout textRow = new LinearLayout(this);
+        textRow.setOrientation(LinearLayout.HORIZONTAL);
+        textRow.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(textRow);
+
+        TextView title = new TextView(this);
+        title.setText((active != null ? active.name : "我的课程表") + "设置");
+        title.setTextColor(0xFF1A1A1A);
+        title.setTextSize(20);
+        title.setTypeface(null, Typeface.BOLD);
+        textRow.addView(title);
+
+        TextView arrow = new TextView(this);
+        arrow.setText("▾");
+        arrow.setTextColor(0xFF0078D7);
+        arrow.setTextSize(20);
+        arrow.setPadding(dp(4), 0, 0, 0); // 仅留极小间隙，紧贴文字
+        textRow.addView(arrow);
+    }
+
+    /** 弹出课程表选择下拉菜单：点击任一项即切换到该课程表的设置 */
+    private void showTimetablePicker() {
+        if (data.timetables.isEmpty()) return;
+        final String[] names = new String[data.timetables.size()];
+        for (int i = 0; i < data.timetables.size(); i++) {
+            AppData.Timetable t = data.timetables.get(i);
+            names[i] = t.name + (t.id.equals(data.activeTimetableId) ? "（当前）" : "");
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("选择课程表设置")
+                .setItems(names, (d, which) -> {
+                    data.setActiveTimetable(data.timetables.get(which).id);
+                    render();
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -259,10 +311,22 @@ public class SettingsActivity extends AppCompatActivity {
 
         MaterialButton del = smallBtn("删");
         del.setTextColor(0xFFEF5350);
-        del.setOnClickListener(v -> {
-            data.deleteCourse(course.id);
-            render();
-        });
+        del.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("删除课程「" + course.name + "」？")
+                .setMessage("删除后，课表中已引用该课程的位置将一并移除。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.deleteCourse(course.id);
+                    // 局部更新：只移除该行，不整页重建（避免退出动画与回到顶部）
+                    ViewGroup parent = (ViewGroup) row.getParent();
+                    if (parent != null) {
+                        parent.removeView(row);
+                        if (data.courses.isEmpty() && parent instanceof LinearLayout) {
+                            ((LinearLayout) parent).addView(hint("暂无课程"));
+                        }
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show());
         row.addView(del, lpWrap());
         return row;
     }
@@ -339,10 +403,22 @@ public class SettingsActivity extends AppCompatActivity {
 
         MaterialButton del = smallBtn("删");
         del.setTextColor(0xFFEF5350);
-        del.setOnClickListener(v -> {
-            data.deleteNonCourse(n.id);
-            render();
-        });
+        del.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("删除非课程项「" + n.name + "」？")
+                .setMessage("删除后，课表中已引用该项目的位子将一并移除。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.deleteNonCourse(n.id);
+                    // 局部更新：只移除该行，不整页重建（避免退出动画与回到顶部）
+                    ViewGroup parent = (ViewGroup) row.getParent();
+                    if (parent != null) {
+                        parent.removeView(row);
+                        if (data.nonCourses.isEmpty() && parent instanceof LinearLayout) {
+                            ((LinearLayout) parent).addView(hint("暂无非课程项"));
+                        }
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show());
         row.addView(del, lpWrap());
         return row;
     }
@@ -411,25 +487,46 @@ public class SettingsActivity extends AppCompatActivity {
     private View clearCard() {
         LinearLayout c = card();
         TextView hint = new TextView(this);
-        hint.setText("清空当前课程表的排布数据（保留课程库、非课程项库与全局设置），清空后可重新排布。");
+        hint.setText("仅删除课程表的每日排布（布局），课程、课时、非课程项等其他全部数据保留。");
         hint.setTextColor(0xFF666666);
         hint.setTextSize(13);
         c.addView(hint);
 
+        // 仅删除当前课程表的每日排布，保留课程/非课程/课时等设置
         MaterialButton clear = new MaterialButton(this);
-        clear.setText("清空课表");
+        clear.setText("删除当前课程表布局");
         clear.setTextColor(Color.WHITE);
-        clear.setBackgroundColor(0xFFEF5350);
-        clear.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
-                .setTitle("确认清空课表？")
-                .setMessage("将删除全部每日排布数据，课程库与非课程项保留。")
-                .setPositiveButton("清空", (d, w) -> {
-                    data.clearSchedule();
-                    toast("已清空课表");
+        clear.setBackgroundColor(0xFFEF9A9A);
+        clear.setOnClickListener(v -> {
+            AppData.Timetable t = data.activeTimetable();
+            String nm = t != null ? t.name : "当前课程表";
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("删除「" + nm + "」的布局？")
+                    .setMessage("将仅删除「" + nm + "」的每日排布，课程、课时、非课程项等设置全部保留。")
+                    .setPositiveButton("删除", (d, w) -> {
+                        data.clearSchedule();
+                        toast("已删除「" + nm + "」的布局");
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        });
+        c.addView(clear, lpTop(8));
+
+        // 仅删除全部课程表的每日排布，保留各课表设置
+        MaterialButton clearAllT = new MaterialButton(this);
+        clearAllT.setText("删除全部课程表布局");
+        clearAllT.setTextColor(Color.WHITE);
+        clearAllT.setBackgroundColor(0xFFEF5350);
+        clearAllT.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("删除全部课程表的布局？")
+                .setMessage("将仅删除全部课程表的每日排布，各课表的课程、课时、非课程项等设置全部保留。")
+                .setPositiveButton("删除", (d, w) -> {
+                    data.clearAllSchedules();
+                    toast("已删除全部课程表的布局");
                 })
                 .setNegativeButton("取消", null)
                 .show());
-        c.addView(clear, lpTop(8));
+        c.addView(clearAllT, lpTop(8));
         return c;
     }
 

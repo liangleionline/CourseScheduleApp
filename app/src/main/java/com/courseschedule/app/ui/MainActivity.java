@@ -38,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout emptyView;
     private TextView titleView, emptyTitle, emptyHint;
     private TextView createBtn;
+    private boolean pagerScrolling; // 是否正处于 ViewPager2 滚动中（进入滚动状态时停一次动画）
 
     private final TimetableView.Listener cellListener = new TimetableView.Listener() {
         @Override
@@ -108,11 +109,16 @@ public class MainActivity extends AppCompatActivity {
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
             public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-                // 滑动中：立即停止全部重绘型动画（发光 BlurMaskFilter 每帧模糊最贵、
-                // 入场波浪每帧全量重绘），避免与滚动重绘叠加导致卡顿，保证跟手流畅
-                for (int i = 0; i < pageViews.size(); i++) {
-                    TimetableView tv = pageViews.valueAt(i);
-                    if (tv != null) tv.onPagerScroll();
+                // 只在「进入滚动状态」的瞬间停一次重绘型动画；若每帧都调 onPagerScroll，
+                // cancelGlow/cancelFloat 的 invalidate 会每帧强制重建硬件层 → 滑动必卡
+                if (positionOffsetPixels != 0 && !pagerScrolling) {
+                    pagerScrolling = true;
+                    for (int i = 0; i < pageViews.size(); i++) {
+                        TimetableView tv = pageViews.valueAt(i);
+                        if (tv != null) tv.onPagerScroll();
+                    }
+                } else if (positionOffsetPixels == 0 && pagerScrolling) {
+                    pagerScrolling = false;
                 }
             }
 

@@ -948,6 +948,7 @@ public class TimetableView extends View {
 
     /** 立即结束上浮（触摸开始/数据刷新等） */
     private void cancelFloat() {
+        boolean was = floatAnimator != null || !floatRects.isEmpty();
         if (floatAnimator != null) {
             floatAnimator.cancel();
             floatAnimator = null;
@@ -955,7 +956,7 @@ public class TimetableView extends View {
         floatCourseRefId = null;
         floatRects.clear();
         floatParams.clear();
-        invalidate();
+        if (was) invalidate(); // 只在确有上浮时才重绘，避免滑动中每帧 invalidate 重建硬件层
     }
 
     private boolean isFloating(String refId) {
@@ -1079,6 +1080,7 @@ public class TimetableView extends View {
 
     /** 立即结束发光 */
     private void cancelGlow() {
+        boolean was = glowAnimator != null || glowKey != null || glowPending;
         if (glowAnimator != null) {
             glowAnimator.cancel();
             glowAnimator = null;
@@ -1086,7 +1088,7 @@ public class TimetableView extends View {
         glowKey = null;
         glowPending = false;
         glowPendingKey = null;
-        invalidate();
+        if (was) invalidate(); // 只在确有动画/光晕时才重绘，避免滑动中每帧 invalidate 重建硬件层
     }
 
     /** 发光强度包络（S 形缓动，渐隐渐现不突兀）：0~20% 正弦缓入，20%~75% 保持，75%~100% 正弦缓出 */

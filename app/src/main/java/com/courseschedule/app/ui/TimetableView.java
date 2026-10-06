@@ -85,7 +85,7 @@ public class TimetableView extends View {
     private static final long ENTRANCE_DUR = 650L;
     private static final long ENTRANCE_STAGGER = 60L;
     private static final long ENTRANCE_STAGGER_COL = 30L;
-    private static final float ENTRANCE_DROP_DP = 13f; // 磁贴入场上移距离（原26dp，减半收敛）
+    private static final float ENTRANCE_DROP_DP = 6f; // 磁贴入场上移距离（小风吹过的轻柔感）
     private long entranceStart = -1L;
     private final OvershootInterpolator entranceInterp = new OvershootInterpolator(3f);
 

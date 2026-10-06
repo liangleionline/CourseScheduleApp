@@ -220,6 +220,22 @@ public class TimetableView extends View {
         invalidate();
     }
 
+    /** ViewPager2 滑动中调用：立即停止全部重绘型动画（入场波浪、发光、按压、下拉回弹、上浮），
+     *  避免昂贵的每帧全量重绘（尤其 BlurMaskFilter 光晕）叠加在滚动上导致卡顿，保证滑动跟手流畅 */
+    public void onPagerScroll() {
+        // 强制入场波浪结束（偏移归零）：entranceStart 置为早已结束 → entranceRunning=false，
+        // cellDropOffset 中 elapsed 巨大 → p=1 → wave=sin(π)=0，磁贴停在原位
+        entranceStart = SystemClock.uptimeMillis()
+                - ENTRANCE_DUR - (long) rows.size() * ENTRANCE_STAGGER
+                - (long) days.size() * ENTRANCE_STAGGER_COL - 1;
+        glowPending = false;
+        cancelGlow();
+        cancelAnim();
+        cancelFloat();
+        cancelPendingTap();
+        pressRelease(true); // 立即熄灭按压点亮
+    }
+
     private boolean isBandRow(Row r) {
         for (RenderedCell c : r.dayCells.values()) {
             if (c.type == TimetableEngine.TYPE_NONCOURSE) return true;

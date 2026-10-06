@@ -95,11 +95,27 @@ public class MainActivity extends AppCompatActivity {
         // 课表区：ViewPager2 左右滑动切换多个课程表（原生跟手滑动，无抖动）
         viewPager = new ViewPager2(this);
         viewPager.setOrientation(ViewPager2.ORIENTATION_HORIZONTAL);
+        // 页面高度固定（整页即一个自绘视图），告知 RecyclerView 尺寸不变，减少滑动时布局重算
+        viewPager.post(() -> {
+            if (viewPager.getChildCount() > 0 && viewPager.getChildAt(0) instanceof RecyclerView) {
+                ((RecyclerView) viewPager.getChildAt(0)).setHasFixedSize(true);
+            }
+        });
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
         tl.weight = 1;
         content.addView(viewPager, tl);
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+                // 滑动中：立即停止全部重绘型动画（发光 BlurMaskFilter 每帧模糊最贵、
+                // 入场波浪每帧全量重绘），避免与滚动重绘叠加导致卡顿，保证跟手流畅
+                for (int i = 0; i < pageViews.size(); i++) {
+                    TimetableView tv = pageViews.valueAt(i);
+                    if (tv != null) tv.onPagerScroll();
+                }
+            }
+
             @Override
             public void onPageSelected(int position) {
                 if (position < 0 || position >= data.timetables.size()) return;

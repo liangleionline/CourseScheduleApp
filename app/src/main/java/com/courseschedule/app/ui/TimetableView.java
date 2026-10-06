@@ -89,6 +89,7 @@ public class TimetableView extends View {
     private long entranceStart = -1L;
 
     private float downX, downY;
+    private boolean swipeDrag; // 是否处于横向拖拽跟随（左右切换课程表随手滑动）
     private boolean moved;
     private final int touchSlop;
 
@@ -578,6 +579,7 @@ public class TimetableView extends View {
                 downX = event.getX();
                 downY = event.getY();
                 moved = false;
+                swipeDrag = false;
                 longPressed = false;
                 cancelFloat(); // 触摸时结束上浮
                 cancelAnim();
@@ -599,23 +601,36 @@ public class TimetableView extends View {
                     }
                 }
                 if (moved) {
-                    // 下拉展开非课程项（0~1），跟随手指
+                    float dx = event.getX() - downX;
                     float dy = event.getY() - downY;
-                    nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
-                    invalidate();
+                    if (Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                        // 横向主导：课程表跟随手指平移（随手滑动切换）
+                        setTranslationX(dx);
+                        swipeDrag = true;
+                    } else {
+                        // 纵向主导：下拉展开非课程项（0~1），跟随手指
+                        nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
+                        invalidate();
+                    }
                 }
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 cancelLongPressTimer();
                 if (moved) {
-                    // 横向滑动切换课程表
-                    float dx = event.getX() - downX;
-                    float dy = event.getY() - downY;
-                    float w = getWidth();
-                    float hThresh = Math.max(dp(60), w * 0.2f);
-                    if (listener != null && Math.abs(dx) > hThresh && Math.abs(dx) > Math.abs(dy) * 1.2f) {
-                        listener.onSwipe(dx > 0 ? -1 : 1);
+                    // 横向拖拽：超阈值且为正常抬起则切换课程表，否则回弹；纵向则收起非课程项
+                    if (swipeDrag) {
+                        float dx = event.getX() - downX;
+                        float w = getWidth();
+                        float hThresh = Math.max(dp(40), w * 0.2f);
+                        if (event.getActionMasked() == MotionEvent.ACTION_UP
+                                && listener != null && Math.abs(dx) > hThresh) {
+                            listener.onSwipe(dx > 0 ? -1 : 1);
+                        } else {
+                            // 未达阈值 / 手势被取消：回弹回原位
+                            animate().translationX(0).setDuration(200).start();
+                        }
+                        swipeDrag = false;
                     }
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);

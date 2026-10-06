@@ -194,8 +194,13 @@ public class MainActivity extends AppCompatActivity {
         data.setActiveTimetable(data.timetables.get(ni).id);
         timetable.setData(data);
         titleView.setText(data.activeTimetable().name);
+        updateEmptyState(); // 同步空状态：新课表若未排课，显示"开始排课"入口
         float w = root.getWidth();
-        timetable.setTranslationX(direction > 0 ? -w : w);
+        // 随手滑动：当前 view 已在手指拖出的偏移位置，直接从该位置滑回原位；
+        // 若未拖拽（如将来其他入口触发），先移到屏幕外再滑入
+        if (Math.abs(timetable.getTranslationX()) < 1f) {
+            timetable.setTranslationX(direction > 0 ? -w : w);
+        }
         // 滑入到位后再播放磁贴入场动画（并触发当前应上课发光），避免与平移重叠
         timetable.animate().translationX(0).setDuration(240)
                 .withEndAction(() -> {
@@ -204,12 +209,10 @@ public class MainActivity extends AppCompatActivity {
                 }).start();
     }
 
-    private void refresh() {
-        data = AppData.get(this);
+    /** 按当前激活课程表同步课表/空状态（refresh 与左右切换共用） */
+    private void updateEmptyState() {
         boolean any = !data.timetables.isEmpty();
-        if (any) data.ensureTimetable();
         AppData.Timetable active = data.activeTimetable();
-        titleView.setText(any && active != null ? active.name : "课程表");
         boolean has = any && data.hasSchedule();
         timetable.setData(data);
         timetable.setVisibility(has ? View.VISIBLE : View.GONE);
@@ -221,6 +224,14 @@ public class MainActivity extends AppCompatActivity {
                     : "点击下方按钮，创建第一个课程表\n多孩家庭可为每个孩子各建一个课程表，左右滑动切换");
             createBtn.setText(any ? "开始排课" : "创建课程表");
         }
+    }
+
+    private void refresh() {
+        data = AppData.get(this);
+        if (!data.timetables.isEmpty()) data.ensureTimetable();
+        AppData.Timetable active = data.activeTimetable();
+        titleView.setText(active != null ? active.name : "课程表");
+        updateEmptyState();
     }
 
     @Override

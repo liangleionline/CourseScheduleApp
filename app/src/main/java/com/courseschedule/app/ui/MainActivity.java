@@ -301,13 +301,17 @@ public class MainActivity extends AppCompatActivity {
         } else {
             refreshPages();
         }
-        // 定位到激活课表（数量变化后先钳制到合法范围，避免 currentItem 越界崩溃）
+        // 定位到激活课表（数量变化后先钳制到合法范围；延后到首帧布局完成后再定位，
+        // 避开 setAdapter 后尚未布局就 setCurrentItem 的 ViewPager2 时序崩溃）
         int idx = data.timetableIndex(data.activeTimetableId);
         int cnt = data.timetables.size();
         if (idx < 0 || idx >= cnt) idx = Math.max(0, cnt - 1);
-        if (cnt > 0 && viewPager.getCurrentItem() != idx) {
-            viewPager.setCurrentItem(idx, false);
-        }
+        final int target = idx;
+        viewPager.post(() -> {
+            if (cnt > 0 && viewPager.getCurrentItem() != target) {
+                viewPager.setCurrentItem(target, false);
+            }
+        });
         AppData.Timetable active = data.activeTimetable();
         titleView.setText(active != null ? active.name : "课程表");
         updateEmptyState();

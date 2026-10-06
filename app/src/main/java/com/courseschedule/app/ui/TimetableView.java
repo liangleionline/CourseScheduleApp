@@ -6,7 +6,6 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RadialGradient;
 import android.graphics.Shader;
 import android.os.SystemClock;
 import android.graphics.RectF;
@@ -1082,29 +1081,35 @@ public class TimetableView extends View {
         return 1f;
     }
 
-    /** 发光磁贴：光晕先画在磁贴后（径向渐变，颜色随磁贴配色），再画磁贴本体（轻微提亮） */
+    /** 发光磁贴：白色圆角方形光晕沿磁贴边框向外扩散（收紧、外淡内浓），再画磁贴本体（轻微提亮） */
     private void drawGlowCell(Canvas canvas) {
         if (glowKey == null || glowCourse == null || glowRect.isEmpty()) return;
         float intensity = glowIntensity(glowProgress);
         if (intensity <= 0.01f) return;
         float density = getResources().getDisplayMetrics().density;
         RectF r = glowRect;
-        float cx = r.centerX(), cy = r.centerY();
-        float radius = (float) Math.hypot(r.width(), r.height()) / 2f + 16f * density;
-        int base = glowCourse.bgColor;
-        int centerColor = (base & 0x00FFFFFF) | ((int) (170 * intensity) << 24);
-        int edgeColor = (base & 0x00FFFFFF); // 边缘透明
-        glowPaint.setShader(new RadialGradient(cx, cy, radius,
-                new int[]{centerColor, centerColor, edgeColor},
-                new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawCircle(cx, cy, radius, glowPaint);
+        // 圆角方形光晕：以磁贴边框为基准，向外扩散 8dp，共 9 层圆角矩形，外层淡、贴边框最浓
+        float extent = 8f * density;
+        int layers = 9;
         glowPaint.setShader(null);
+        glowPaint.setStyle(Paint.Style.FILL);
+        glowPaint.setColor(0xFFFFFFFF); // 白色光晕
+        float corner = 4f * density; // 圆角半径（柔和边角）
+        for (int i = 0; i < layers; i++) {
+            float t = i / (float) (layers - 1);
+            float inset = extent * (1f - t); // 外圈(extent) → 内圈(贴边框0)
+            // 外淡内浓：内圈最高 120
+            glowPaint.setAlpha((int) (120 * intensity * (1f - t * t)));
+            canvas.drawRoundRect(
+                    r.left - inset, r.top - inset, r.right + inset, r.bottom + inset,
+                    corner + inset * 0.4f, corner + inset * 0.4f, glowPaint);
+        }
         // 磁贴本体：发光状态轻微提亮（光源从磁贴后发出）
         cellPaint.setColor(glowCourse.bgColor);
         canvas.drawRect(r, cellPaint);
         glassPaint.setShader(null);
         glassPaint.setColor(0xFFFFFFFF);
-        glassPaint.setAlpha((int) (38 * intensity));
+        glassPaint.setAlpha((int) (25 * intensity));
         canvas.drawRect(r, glassPaint);
         drawTileGlass(canvas, r, 255);
         drawCellText(canvas, r, glowCourse.name,

@@ -10,8 +10,8 @@ android {
         applicationId "com.courseschedule.app"
         minSdk 24
         targetSdk 34
-        versionCode 58
-        versionName "2.8.0-glow"
+        versionCode 59
+        versionName "2.8.1-glow"
     }
 
     signingConfigs {

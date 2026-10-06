@@ -1074,10 +1074,17 @@ public class TimetableView extends View {
         invalidate();
     }
 
-    /** 发光强度包络：0~12% 快速亮起，12%~85% 保持，85%~100% 淡出 */
+    /** 发光强度包络（S 形缓动，渐隐渐现不突兀）：0~20% 正弦缓入，20%~75% 保持，75%~100% 正弦缓出 */
     private float glowIntensity(float p) {
-        if (p < 0.12f) return p / 0.12f;
-        if (p > 0.85f) return (1f - p) / 0.15f;
+        if (p < 0.2f) {
+            // 渐入：0.2 内 cos 从 0→π，0.5-0.5cos = S 形缓入（起止速度为零）
+            return (float) (0.5 - 0.5 * Math.cos(Math.PI * p / 0.2f));
+        }
+        if (p > 0.75f) {
+            // 渐出：0.75→1 内 cos 从 π→0，0.5+0.5cos = S 形缓出
+            float q = (p - 0.75f) / 0.25f;
+            return (float) (0.5 + 0.5 * Math.cos(Math.PI * q));
+        }
         return 1f;
     }
 

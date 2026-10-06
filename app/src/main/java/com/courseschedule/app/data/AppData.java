@@ -268,6 +268,19 @@ public class AppData {
         persist();
     }
 
+    /** 清空全部课程表的数据（排布、课程库、非课程库、恢复默认课时） */
+    public void clearAllTimetablesData() {
+        for (Timetable t : timetables) {
+            t.entries.clear();
+            t.courses.clear();
+            t.nonCourses.clear();
+            t.lessonDurationMin = DEFAULT_LESSON;
+            t.firstStartMin = DEFAULT_FIRST_START;
+        }
+        syncActiveRefs();
+        persist();
+    }
+
     public void persist() {
         try {
             prefs.edit().putString(KEY_DATA, toJson().toString()).apply();

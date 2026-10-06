@@ -179,18 +179,25 @@ public class SettingsActivity extends AppCompatActivity {
         parent.addView(row);
 
         AppData.Timetable active = data.activeTimetable();
+        // 名称+▾作为一个整体居左，▾紧贴文字右侧，不撑满不靠右
+        LinearLayout textRow = new LinearLayout(this);
+        textRow.setOrientation(LinearLayout.HORIZONTAL);
+        textRow.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(textRow);
+
         TextView title = new TextView(this);
         title.setText((active != null ? active.name : "我的课程表") + "设置");
         title.setTextColor(0xFF1A1A1A);
         title.setTextSize(20);
         title.setTypeface(null, Typeface.BOLD);
-        row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        textRow.addView(title);
 
         TextView arrow = new TextView(this);
         arrow.setText("▾");
         arrow.setTextColor(0xFF0078D7);
         arrow.setTextSize(20);
-        row.addView(arrow, lpWrap());
+        arrow.setPadding(dp(4), 0, 0, 0); // 仅留极小间隙，紧贴文字
+        textRow.addView(arrow);
     }
 
     /** 弹出课程表选择下拉菜单：点击任一项即切换到该课程表的设置 */
@@ -456,25 +463,10 @@ public class SettingsActivity extends AppCompatActivity {
     private View clearCard() {
         LinearLayout c = card();
         TextView hint = new TextView(this);
-        hint.setText("清空当前课程表的排布数据（保留课程库、非课程项库与全局设置），清空后可重新排布。");
+        hint.setText("清空课程表的排布与设置数据（课程项、非课程项、课时时长），清空后可重新排布。");
         hint.setTextColor(0xFF666666);
         hint.setTextSize(13);
         c.addView(hint);
-
-        MaterialButton clear = new MaterialButton(this);
-        clear.setText("清空课表（仅排布）");
-        clear.setTextColor(Color.WHITE);
-        clear.setBackgroundColor(0xFFEF9A9A);
-        clear.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
-                .setTitle("确认清空课表？")
-                .setMessage("将删除当前课程表的全部每日排布数据，课程库与非课程项保留。")
-                .setPositiveButton("清空", (d, w) -> {
-                    data.clearSchedule();
-                    toast("已清空课表");
-                })
-                .setNegativeButton("取消", null)
-                .show());
-        c.addView(clear, lpTop(8));
 
         // 清空当前课程表全部数据（排布+课程+非课程+恢复默认课时），弹窗带课程表名称确认
         MaterialButton clearAll = new MaterialButton(this);
@@ -496,6 +488,23 @@ public class SettingsActivity extends AppCompatActivity {
                     .show();
         });
         c.addView(clearAll, lpTop(8));
+
+        // 清空所有课程表数据，弹窗确认
+        MaterialButton clearAllT = new MaterialButton(this);
+        clearAllT.setText("清空所有课表数据");
+        clearAllT.setTextColor(Color.WHITE);
+        clearAllT.setBackgroundColor(0xFFD32F2F);
+        clearAllT.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                .setTitle("确定清空所有课程表的数据？")
+                .setMessage("将删除全部课程表的每日排布、课程项与非课程项设置，并恢复默认课时时长。\n此操作不可恢复。")
+                .setPositiveButton("清空", (d, w) -> {
+                    data.clearAllTimetablesData();
+                    toast("已清空所有课程表的数据");
+                    render();
+                })
+                .setNegativeButton("取消", null)
+                .show());
+        c.addView(clearAllT, lpTop(8));
         return c;
     }
 

@@ -59,6 +59,9 @@ public class SettingsActivity extends AppCompatActivity {
         title.setTypeface(null, Typeface.BOLD);
         inner.addView(title);
 
+        // 课程表选择器：显示「课程表名+设置 ▾」，点击可下拉切换当前设置的课程表
+        titleSelector(inner);
+
         sectionTitle(inner, "课程表管理");
         timetableSection(inner);
 
@@ -161,6 +164,48 @@ public class SettingsActivity extends AppCompatActivity {
                     String name = et.getText().toString().trim();
                     if (name.isEmpty()) name = "我的课程表";
                     onOk.accept(name);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /** 顶部课程表选择器：显示「课程表名+设置 ▾」，点击弹出下拉菜单切换当前设置的课程表 */
+    private void titleSelector(LinearLayout parent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(8));
+        row.setOnClickListener(v -> showTimetablePicker());
+        parent.addView(row);
+
+        AppData.Timetable active = data.activeTimetable();
+        TextView title = new TextView(this);
+        title.setText((active != null ? active.name : "我的课程表") + "设置");
+        title.setTextColor(0xFF1A1A1A);
+        title.setTextSize(20);
+        title.setTypeface(null, Typeface.BOLD);
+        row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        TextView arrow = new TextView(this);
+        arrow.setText("▾");
+        arrow.setTextColor(0xFF0078D7);
+        arrow.setTextSize(20);
+        row.addView(arrow, lpWrap());
+    }
+
+    /** 弹出课程表选择下拉菜单：点击任一项即切换到该课程表的设置 */
+    private void showTimetablePicker() {
+        if (data.timetables.isEmpty()) return;
+        final String[] names = new String[data.timetables.size()];
+        for (int i = 0; i < data.timetables.size(); i++) {
+            AppData.Timetable t = data.timetables.get(i);
+            names[i] = t.name + (t.id.equals(data.activeTimetableId) ? "（当前）" : "");
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("选择课程表设置")
+                .setItems(names, (d, which) -> {
+                    data.setActiveTimetable(data.timetables.get(which).id);
+                    render();
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -417,12 +462,12 @@ public class SettingsActivity extends AppCompatActivity {
         c.addView(hint);
 
         MaterialButton clear = new MaterialButton(this);
-        clear.setText("清空课表");
+        clear.setText("清空课表（仅排布）");
         clear.setTextColor(Color.WHITE);
-        clear.setBackgroundColor(0xFFEF5350);
+        clear.setBackgroundColor(0xFFEF9A9A);
         clear.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
                 .setTitle("确认清空课表？")
-                .setMessage("将删除全部每日排布数据，课程库与非课程项保留。")
+                .setMessage("将删除当前课程表的全部每日排布数据，课程库与非课程项保留。")
                 .setPositiveButton("清空", (d, w) -> {
                     data.clearSchedule();
                     toast("已清空课表");
@@ -430,6 +475,27 @@ public class SettingsActivity extends AppCompatActivity {
                 .setNegativeButton("取消", null)
                 .show());
         c.addView(clear, lpTop(8));
+
+        // 清空当前课程表全部数据（排布+课程+非课程+恢复默认课时），弹窗带课程表名称确认
+        MaterialButton clearAll = new MaterialButton(this);
+        clearAll.setText("清空当前课程表数据");
+        clearAll.setTextColor(Color.WHITE);
+        clearAll.setBackgroundColor(0xFFEF5350);
+        clearAll.setOnClickListener(v -> {
+            AppData.Timetable t = data.activeTimetable();
+            String nm = t != null ? t.name : "当前课程表";
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("确定清空「" + nm + "」的全部数据？")
+                    .setMessage("将删除「" + nm + "」的每日排布、课程项与非课程项设置，并恢复默认课时时长。\n此操作不可恢复。")
+                    .setPositiveButton("清空", (d, w) -> {
+                        data.clearTimetableData();
+                        toast("已清空「" + nm + "」的数据");
+                        render();
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        });
+        c.addView(clearAll, lpTop(8));
         return c;
     }
 

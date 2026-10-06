@@ -4,6 +4,7 @@ import android.animation.ValueAnimator;
 import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Shader;
@@ -150,6 +151,7 @@ public class TimetableView extends View {
     private float glowProgress;         // 0~1
     private ValueAnimator glowAnimator;
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private BlurMaskFilter glowBlur; // 光晕高斯模糊（init 中按屏幕密度创建）
 
     public TimetableView(Context c, AttributeSet a) {
         super(c, a);
@@ -162,6 +164,7 @@ public class TimetableView extends View {
         pad = 8 * d;
         timeAxisW = 44 * d;
         headerH = 44 * d;
+        glowBlur = new BlurMaskFilter(10f * d, BlurMaskFilter.Blur.NORMAL); // 光晕柔化模糊
 
         linePaint.setColor(0xFFE0E0E0);
         linePaint.setStrokeWidth(1f * d);
@@ -1088,30 +1091,26 @@ public class TimetableView extends View {
         return 1f;
     }
 
-    /** 发光磁贴：白色圆角方形光晕沿磁贴边框向外扩散（收紧、外淡内浓），再画磁贴本体（轻微提亮）。
+    /** 发光磁贴：白色圆角方形光晕沿磁贴边框向外扩散（高斯模糊柔化，有真实的扩散淡出感），再画磁贴本体（轻微提亮）。
      *  磁贴本体始终完整绘制（光晕强度极低时也不留空白），避免渐入/渐出瞬间闪烁 */
     private void drawGlowCell(Canvas canvas) {
         if (glowKey == null || glowCourse == null || glowRect.isEmpty()) return;
         float intensity = glowIntensity(glowProgress);
         RectF r = glowRect;
         if (intensity > 0.01f) {
-            // 圆角方形光晕：以磁贴边框为基准，向外扩散 8dp，共 9 层圆角矩形，外层淡、贴边框最浓
+            // 光晕：白色圆角方形先画，高斯模糊使其边缘柔和向外扩散淡出
             float density = getResources().getDisplayMetrics().density;
-            float extent = 8f * density;
-            int layers = 9;
+            float extent = 7f * density; // 光晕外扩范围（收紧）
+            float corner = 5f * density; // 圆角半径（柔和边角）
             glowPaint.setShader(null);
             glowPaint.setStyle(Paint.Style.FILL);
-            glowPaint.setColor(0xFFFFFFFF); // 白色光晕
-            float corner = 4f * density; // 圆角半径（柔和边角）
-            for (int i = 0; i < layers; i++) {
-                float t = i / (float) (layers - 1);
-                float inset = extent * (1f - t); // 外圈(extent) → 内圈(贴边框0)
-                // 外淡内浓：内圈最高 120
-                glowPaint.setAlpha((int) (120 * intensity * (1f - t * t)));
-                canvas.drawRoundRect(
-                        r.left - inset, r.top - inset, r.right + inset, r.bottom + inset,
-                        corner + inset * 0.4f, corner + inset * 0.4f, glowPaint);
-            }
+            glowPaint.setColor(0xFFFFFFFF);
+            glowPaint.setAlpha((int) (130 * intensity));
+            glowPaint.setMaskFilter(glowBlur); // 模糊 → 扩散淡出感
+            canvas.drawRoundRect(
+                    r.left - extent, r.top - extent, r.right + extent, r.bottom + extent,
+                    corner + extent * 0.3f, corner + extent * 0.3f, glowPaint);
+            glowPaint.setMaskFilter(null);
         }
         // 磁贴本体：始终完整绘制；发光状态叠加轻微提亮（光源从磁贴后发出）
         cellPaint.setColor(glowCourse.bgColor);

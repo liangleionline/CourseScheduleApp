@@ -89,6 +89,7 @@ public class TimetableView extends View {
 
     private float downX, downY;
     private boolean moved;
+    private boolean pullLocked; // 下拉锁定：已判定下拉手势后禁止父容器(ViewPager2)拦截，防止手势中断缩回
     private final int touchSlop;
 
     // ---------- 长按编辑（翻转背面只翻回；修改需长按磁贴弹出编辑框） ----------
@@ -598,6 +599,8 @@ public class TimetableView extends View {
                 downX = event.getX();
                 downY = event.getY();
                 moved = false;
+                pullLocked = false;
+                if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false); // 重置上次锁定
                 longPressed = false;
                 cancelFloat(); // 触摸时结束上浮
                 cancelAnim();
@@ -621,6 +624,14 @@ public class TimetableView extends View {
                 if (moved) {
                     // 下拉展开非课程项（0~1），跟随手指（横向滑动由外层 ViewPager 拦截切换课程表）
                     float dy = event.getY() - downY;
+                    float dx = event.getX() - downX;
+                    // 触摸冲突：下拉意图一旦判定（纵向主导），锁定禁止父容器拦截——
+                    // 否则手指下拉中轻微横向分量会触发 ViewPager2 拦截，收到 ACTION_CANCEL，
+                    // 下拉被突然中断、自己缩回去
+                    if (!pullLocked && dy > 0f && dy > Math.abs(dx)) {
+                        pullLocked = true;
+                        if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
+                    }
                     nonCourseReveal = Math.max(0f, Math.min(1f, dy / dp(150)));
                     invalidate();
                 }
@@ -628,6 +639,8 @@ public class TimetableView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 cancelLongPressTimer();
+                if (pullLocked && getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
+                pullLocked = false;
                 if (moved) {
                     // 松手回弹：收起非课程项
                     animateRevealTo(0f);

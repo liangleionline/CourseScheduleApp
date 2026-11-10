@@ -10,7 +10,7 @@
   <a href="https://github.com/liangleionline/CourseScheduleApp"><img src="https://img.shields.io/github/forks/liangleionline/CourseScheduleApp?label=Forks&color=blue" alt="Forks"></a>
   <a href="https://github.com/liangleionline/CourseScheduleApp/commits/main"><img src="https://img.shields.io/github/last-commit/liangleionline/CourseScheduleApp?label=%E6%9C%80%E8%BF%91%E6%8F%90%E4%BA%A4" alt="最近提交"></a>
   <a href="https://github.com/liangleionline/CourseScheduleApp/graphs/commit-activity"><img src="https://img.shields.io/github/commit-activity/m/liangleionline/CourseScheduleApp?label=%E6%9C%88%E6%8F%90%E4%BA%A4" alt="月提交"></a>
-  <a href="https://github.com/liangleionline/stargazers"><img src="https://visitor-badge.laobi.icu/badge?page_id=liangleionline.CourseScheduleApp&left_text=README%E8%AE%BF%E9%97%AE%E9%87%8F" alt="README访问量"></a>
+  <a href="https://github.com/liangleionline/CourseScheduleApp"><img src="https://visitor-badge.laobi.icu/badge?page_id=liangleionline.CourseScheduleApp&left_text=README%E8%AE%BF%E9%97%AE%E9%87%8F" alt="README访问量"></a>
 </p>
 
 一个面向学生的周度课程表安卓应用：首次启动引导完成 4 步配置，首页展示周一至周五课程表，支持单格编辑、课程/非课程自动配色、贯穿全周的非课程项、设置页全局管理、清空课表与周六周日显示开关。

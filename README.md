@@ -74,7 +74,7 @@ app/src/main/java/com/courseschedule/app/
 
 ## 开源声明与许可
 
-本项目以 **GNU General Public License v3.0** 发布，许可证全文见 [LICENSE](./LICENSE)。
+本项目以 **GNU General Public License v3.0（GPL-3.0）** 发布，许可证全文见 [LICENSE](./LICENSE)。
 
 桌面小组件的实现参考并复刻自开源项目 [ShiGuangSchedule/shiguangschedule](https://github.com/ShiGuangSchedule/shiguangschedule)（Apache License 2.0，Copyright (C) 2025 XingHeYuZhuan）。引用范围与修改说明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)，其许可证全文见 [LICENSES/APACHE-2.0.txt](./LICENSES/APACHE-2.0.txt)。
 
